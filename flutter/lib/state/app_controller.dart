@@ -1508,8 +1508,10 @@ class AppController extends ChangeNotifier {
     final baseRate = numOf(currency is Map ? (currency['Rate'] ?? currency['rate'] ?? 1) : 1);
     final hawala = parseHawalaRate(row.rate);
     final currencyId = row.currencyId.isNotEmpty ? row.currencyId : baseCurrencyId;
+    // Wakeed voucher lines store the quote as foreign units per 1 USD (47.77 T = 1$),
+    // then show equivalent = amount / rate. USD stays 1.
     final rate = row.rate.trim().isNotEmpty
-        ? hawalaPostRate(hawala)
+        ? hawala
         : (baseRate == 0 ? 1 : baseRate);
     final equivalent = amountToBase(amount, row.rate.trim().isNotEmpty ? hawala : 1);
     final accountId = pickId(account);
@@ -1529,6 +1531,7 @@ class AppController extends ChangeNotifier {
       'notes': note,
       if (currencyId.isNotEmpty) 'currencyID': currencyId,
       'rate': rate == 0 ? 1 : rate,
+      'Rate': rate == 0 ? 1 : rate,
       'date': dateIso,
       'orderInJournal': index,
       'discountGiving': 0,
@@ -1540,6 +1543,8 @@ class AppController extends ChangeNotifier {
       detail['Equivalent'] = equivalent;
       detail['debitEquivalent'] = isDebit ? equivalent : 0;
       detail['creditEquivalent'] = isDebit ? 0 : equivalent;
+      detail['EquivalentDebit'] = isDebit ? equivalent : 0;
+      detail['EquivalentCredit'] = isDebit ? 0 : equivalent;
     }
     if (extras['costCenterId'] != null && extras['costCenterId'].toString().isNotEmpty) {
       detail['costCenterID'] = extras['costCenterId'];

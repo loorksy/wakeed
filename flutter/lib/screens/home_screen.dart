@@ -1303,8 +1303,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
       decoration: partyFieldDecoration(
         debit: debit,
         base: _dense,
-        hintText: 'سعر الصرف',
-        labelText: code.isEmpty ? 'سعر الصرف' : 'سعر $code',
+        hintText: 'مثال 47.77',
+        labelText: code.isEmpty ? '1 دولار =' : '1 دولار = ($code)',
       ),
       onChanged: (_) => _sync(),
     );
@@ -1402,6 +1402,14 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
           if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             _rateField(controller: creditRateCtrl, debit: false, code: creditQ.code),
+            if (c > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${formatProfitAmount(c)} ${creditQ.badge} = ${formatProfitAmount(creditBase)} $baseSymbol',
+                  style: const TextStyle(fontSize: 11, color: WakeedColors.green),
+                ),
+              ),
           ],
           const SizedBox(height: 6),
           Row(
@@ -1431,6 +1439,14 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
           if (!debitQ.isBase && debitCtrl.text.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             _rateField(controller: debitRateCtrl, debit: true, code: debitQ.code),
+            if (d > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${formatProfitAmount(d)} ${debitQ.badge} = ${formatProfitAmount(debitBase)} $baseSymbol',
+                  style: const TextStyle(fontSize: 11, color: WakeedColors.err),
+                ),
+              ),
           ],
           if (c > 0 || d > 0) ...[
             const SizedBox(height: 8),

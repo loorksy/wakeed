@@ -129,14 +129,14 @@ class ProfitFxBar extends StatelessWidget {
     }
 
     final unit = symbol.trim().isEmpty ? '' : ' $symbol';
+    final diffColor = diff < -0.001 ? WakeedColors.err : diff > 0.001 ? WakeedColors.green : WakeedColors.err;
     return Row(
-      textDirection: TextDirection.ltr,
       children: [
-        box('فرق', '${formatProfitSigned(diff)}$unit', WakeedColors.err),
+        box('مدين', '${formatProfitAmount(debitBase)}$unit', WakeedColors.pink),
         const SizedBox(width: 6),
         box('دائن', '${formatProfitAmount(creditBase)}$unit', WakeedColors.green),
         const SizedBox(width: 6),
-        box('مدين', '${formatProfitAmount(debitBase)}$unit', WakeedColors.pink),
+        box('فرق', '${formatProfitSigned(diff)}$unit', diffColor),
       ],
     );
   }

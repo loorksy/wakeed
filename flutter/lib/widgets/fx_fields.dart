@@ -31,8 +31,8 @@ class FxRateField extends StatelessWidget {
           isDense: true,
           contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         ),
-        hintText: 'سعر الصرف',
-        labelText: code.isEmpty ? 'سعر الصرف' : 'سعر $code',
+        hintText: 'مثال 47.77',
+        labelText: code.isEmpty ? '1 دولار =' : '1 دولار = ($code)',
       ),
       onChanged: onChanged,
     );
