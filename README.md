@@ -26,7 +26,8 @@ npm start
 - `client/` — واجهة المستخدم + platform.js + api-client.js
 - `admin/` — لوحة إدارة التراخيص
 - `download/` — صفحة تنزيل APK
-- `mobile/` — Capacitor Android
+- `mobile/` — Capacitor Android (واجهة الويب المغلفة)
+- `flutter/` — تطبيق أندرويد الأصلي (الترخيص + سند الحوالة)
 - `deploy/` — nginx + systemd + دليل النشر
 
 ## الترخيص
@@ -41,4 +42,14 @@ npm start
 
 ## APK
 
-راجع [`mobile/README.md`](mobile/README.md).
+تطبيق Flutter الأصلي:
+
+```bash
+cd flutter
+flutter pub get
+flutter test
+flutter build apk --release --target-platform android-arm64
+cp build/app/outputs/flutter-apk/app-release.apk ../releases/wakeed-app.apk
+```
+
+راجع [`flutter/README.md`](flutter/README.md). غلاف Capacitor القديم ما زال في [`mobile/README.md`](mobile/README.md).
