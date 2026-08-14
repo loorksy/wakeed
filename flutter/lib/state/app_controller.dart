@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/constants.dart';
 import '../core/exceptions.dart';
@@ -10,13 +11,15 @@ import '../core/json_util.dart';
 import '../core/remittance_parser.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../services/platform_service.dart';
 
 class AppController extends ChangeNotifier {
-  AppController({required this.platform, required this.api});
+  AppController({required this.platform, required this.api, this.notifications});
 
   final PlatformService platform;
   final ApiService api;
+  final NotificationService? notifications;
 
   AppPhase phase = AppPhase.boot;
   ThemeMode themeMode = ThemeMode.dark;
@@ -80,26 +83,17 @@ class AppController extends ChangeNotifier {
 
   Future<void> boot() async {
     platform.onBlock = (message, code) {
+      if (submitJob.active && code == 'offline') return;
       phase = AppPhase.blocked;
       _emit();
     };
-    _connSub = Connectivity().onConnectivityChanged.listen((results) {
-      final offline = results.isEmpty || results.every((r) => r == ConnectivityResult.none);
-      if (offline && phase != AppPhase.license) {
-        platform.blockApp('لا يوجد اتصال بالسيرفر. التطبيق متوقف حتى عودة الاتصال.', 'offline');
-        phase = AppPhase.blocked;
-        _emit();
+    _connSub = Connectivity().onConnectivityChanged.listen((results) async {
+      final none = results.every((r) => r == ConnectivityResult.none);
+      if (none || platform.paused) return;
+      if (platform.blocked) {
+        await retryBlock();
       }
     });
-
-    final net = await Connectivity().checkConnectivity();
-    final offline = net.isEmpty || net.every((r) => r == ConnectivityResult.none);
-    if (offline) {
-      platform.blockApp('لا يوجد اتصال بالسيرفر. التطبيق متوقف حتى عودة الاتصال.', 'offline');
-      phase = AppPhase.blocked;
-      _emit();
-      return;
-    }
 
     final hasSession = await platform.initPlatform();
     if (platform.blocked) {
@@ -113,6 +107,28 @@ class AppController extends ChangeNotifier {
       return;
     }
     await _bootApp();
+    _restorePersistedDialog();
+  }
+
+  Future<void> handleLifecycle(AppLifecycleState state) async {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.inactive:
+        platform.paused = true;
+        break;
+      case AppLifecycleState.resumed:
+        platform.paused = false;
+        if (platform.blocked) {
+          await retryBlock(silent: true);
+        } else if (platform.sessionToken.isNotEmpty) {
+          await platform.heartbeat(blockOnFailure: false);
+        }
+        _restorePersistedDialog();
+        break;
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   Future<void> _bootApp() async {
@@ -162,18 +178,29 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> retryBlock() async {
-    busy = true;
-    _emit();
-    final ok = await platform.heartbeat();
-    busy = false;
+  Future<void> retryBlock({bool silent = false}) async {
+    if (!silent) {
+      busy = true;
+      _emit();
+    }
+    var ok = false;
+    for (var i = 0; i < 3; i++) {
+      ok = await platform.heartbeat(blockOnFailure: i == 2);
+      if (ok) break;
+      await Future<void>.delayed(Duration(milliseconds: 600 * (i + 1)));
+    }
+    if (!silent) busy = false;
     if (ok) {
       platform.unblockApp();
       platform.startHeartbeat();
       if (connected) {
         phase = AppPhase.home;
-      } else {
-        phase = AppPhase.login;
+      } else if (platform.sessionToken.isNotEmpty) {
+        if (platform.wakeedToken.isNotEmpty) {
+          await connect();
+        } else {
+          phase = AppPhase.login;
+        }
       }
     }
     _emit();
@@ -267,6 +294,8 @@ class AppController extends ChangeNotifier {
     final name = (data['userDisplayName'] ?? '').toString().trim();
     if (name.isNotEmpty) {
       platform.userDisplayName = name;
+    } else if (platform.userDisplayName.trim().isEmpty && username.trim().isNotEmpty) {
+      platform.userDisplayName = username.trim();
     }
     if (data['subscriptions'] is List && (data['subscriptions'] as List).isNotEmpty) {
       platform.subscriptions = data['subscriptions'] as List;
@@ -297,6 +326,12 @@ class AppController extends ChangeNotifier {
         .toList();
   }
 
+  String get displayUserName {
+    final n = platform.userDisplayName.trim();
+    if (n.isNotEmpty) return n;
+    return username.trim();
+  }
+
   String subscriptionLabel(WakeedSubscription sub) {
     final name = sub.name.trim();
     if (name.isNotEmpty &&
@@ -304,7 +339,11 @@ class AppController extends ChangeNotifier {
         !RegExp(r'^owner[_-]', caseSensitive: false).hasMatch(name)) {
       return name;
     }
-    if (platform.userDisplayName.isNotEmpty) return platform.userDisplayName;
+    if (displayUserName.isNotEmpty) return displayUserName;
+    if (sub.ownerKey.isNotEmpty) {
+      final key = sub.ownerKey.replaceFirst(RegExp(r'^owner[_-]', caseSensitive: false), '');
+      return key.isNotEmpty ? key : sub.ownerKey;
+    }
     return 'حساب وكيد';
   }
 
@@ -338,7 +377,7 @@ class AppController extends ChangeNotifier {
 
   void syncSessionBadge([String currencyName = '']) {
     if (!connected && platform.wakeedToken.isEmpty) return;
-    final user = platform.userDisplayName.trim();
+    final user = displayUserName;
     final company = currentCompanyName();
     final display = user.isNotEmpty
         ? user
@@ -410,6 +449,9 @@ class AppController extends ChangeNotifier {
       if (settings['notesEach'] != null) notesEach = settings['notesEach'].toString();
       if (settings['userDisplayName'] != null) {
         platform.userDisplayName = settings['userDisplayName'].toString();
+      }
+      if (platform.userDisplayName.trim().isEmpty && username.trim().isNotEmpty) {
+        platform.userDisplayName = username.trim();
       }
       if (settings['subscriptions'] is List) platform.subscriptions = settings['subscriptions'] as List;
       if (settings['manualEntries'] is List && (settings['manualEntries'] as List).isNotEmpty) {
@@ -1368,6 +1410,8 @@ class AppController extends ChangeNotifier {
       submitJob.details = details;
     }
     lastDialog = DialogData(phase: SubmitPhase.error, title: title, message: message, details: details);
+    _persistDialog(lastDialog);
+    notifications?.showDone(title, message, success: false);
     _emit();
   }
 
@@ -1379,13 +1423,35 @@ class AppController extends ChangeNotifier {
       submitJob.details = details;
     }
     lastDialog = DialogData(phase: SubmitPhase.success, title: title, message: message, details: details);
+    _persistDialog(lastDialog);
+    notifications?.showDone(title, message, success: true);
     _emit();
   }
 
   DialogData? lastDialog;
 
+  void _persistDialog(DialogData? data) {
+    if (data == null || data.phase == SubmitPhase.loading) {
+      platform.storage.saveLastDialog(null);
+      return;
+    }
+    platform.storage.saveLastDialog(data.toJson());
+  }
+
+  void _restorePersistedDialog() {
+    if (lastDialog != null) return;
+    final raw = platform.storage.loadLastDialog();
+    if (raw == null) return;
+    final data = DialogData.fromJson(raw);
+    if (data.phase == SubmitPhase.loading || data.title.isEmpty) return;
+    lastDialog = data;
+    _emit();
+  }
+
   void clearDialog() {
     lastDialog = null;
+    _persistDialog(null);
+    notifications?.cancelAll();
     if (!submitJob.active) {
       submitJob.title = '';
       submitJob.message = '';
@@ -1454,6 +1520,10 @@ class AppController extends ChangeNotifier {
     );
     _emit();
     try {
+      await WakelockPlus.enable();
+    } catch (_) {}
+    await notifications?.showProgress('وكيد — جارٍ التسجيل', loadingMessage);
+    try {
       final prepared = await getPrepared();
       if (prepared == null) return;
       if (mode == 'batch') {
@@ -1464,6 +1534,9 @@ class AppController extends ChangeNotifier {
     } catch (err) {
       showSubmitError('فشل الإنشاء', err.toString(), '', true);
     } finally {
+      try {
+        await WakelockPlus.disable();
+      } catch (_) {}
       finishSubmitJob();
     }
   }
@@ -1646,4 +1719,25 @@ class DialogData {
   final String title;
   final String message;
   final String details;
+
+  Map<String, dynamic> toJson() => {
+        'phase': phase.name,
+        'title': title,
+        'message': message,
+        'details': details,
+      };
+
+  factory DialogData.fromJson(Map<String, dynamic> json) {
+    final name = (json['phase'] ?? 'success').toString();
+    final phase = SubmitPhase.values.firstWhere(
+      (e) => e.name == name,
+      orElse: () => SubmitPhase.success,
+    );
+    return DialogData(
+      phase: phase,
+      title: (json['title'] ?? '').toString(),
+      message: (json['message'] ?? '').toString(),
+      details: (json['details'] ?? '').toString(),
+    );
+  }
 }

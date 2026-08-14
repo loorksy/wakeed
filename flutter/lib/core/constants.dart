@@ -10,3 +10,4 @@ const Duration httpTimeout = Duration(seconds: 45);
 const String prefsSessionToken = 'wakeed.sessionToken';
 const String prefsDeviceId = 'wakeed.deviceId';
 const String prefsLicenseKey = 'wakeed.licenseKey';
+const String prefsLastDialog = 'wakeed.lastDialog';

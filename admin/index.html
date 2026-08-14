@@ -164,9 +164,10 @@
         if (lic.status !== "deleted") {
           actions.push('<button type="button" data-act="delete" data-id="' + lic.id + '" class="danger">حذف</button>');
         }
+        actions.push('<button type="button" data-act="copy" data-key="' + String(lic.license_key || "").replace(/"/g, "") + '">نسخ المفتاح</button>');
         return (
           "<tr>" +
-          '<td class="license-key">' + (lic.license_key || "—") + "</td>" +
+          '<td class="license-key"><code>' + (lic.license_key || "—") + '</code></td>' +
           "<td>" + (lic.label || "—") + "</td>" +
           "<td>" + statusBadge(lic.status) + "</td>" +
           "<td>" + device + "</td>" +
@@ -236,7 +237,14 @@
           body: JSON.stringify({ label: els.newLicenseLabel.value.trim() }),
         });
         els.newLicenseLabel.value = "";
-        setStatus("تم إنشاء: " + (data.license?.license_key || ""), "ok");
+        const key = data.license?.license_key || "";
+        setStatus("تم إنشاء: " + key, "ok");
+        if (key) {
+          try {
+            await navigator.clipboard.writeText(key);
+            setStatus("تم إنشاء ونسخ المفتاح: " + key, "ok");
+          } catch (_) {}
+        }
         await loadLicenses();
       } catch (err) {
         setStatus(err.message, "error");
@@ -251,6 +259,18 @@
       const btn = ev.target.closest("button[data-act]");
       if (!btn) return;
       const act = btn.dataset.act;
+      if (act === "copy") {
+        const key = btn.dataset.key || "";
+        if (!key) return;
+        try {
+          await navigator.clipboard.writeText(key);
+          setStatus("تم نسخ المفتاح: " + key, "ok");
+        } catch (_) {
+          window.prompt("انسخ المفتاح:", key);
+          setStatus("انسخ المفتاح يدوياً.", "ok");
+        }
+        return;
+      }
       const id = btn.dataset.id;
       const confirmMsg = act === "delete" ? "حذف الترخيص نهائياً؟" : act === "suspend" ? "إيقاف الترخيص؟" : "تفعيل الترخيص؟";
       if (!confirm(confirmMsg)) return;

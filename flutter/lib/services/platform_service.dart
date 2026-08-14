@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
@@ -45,6 +44,8 @@ class PlatformService {
     storage.saveDeviceId(id);
     return id;
   }
+
+  bool paused = false;
 
   Map<String, String> platformHeaders() {
     return {
@@ -114,13 +115,16 @@ class PlatformService {
       }
     } on PlatformApiException {
       rethrow;
-    } on SocketException {
-      return _blockOffline();
-    } on HttpException {
-      return _blockOffline();
     } on TimeoutException {
+      if (paused) {
+        throw PlatformApiException('لا يوجد اتصال بالسيرفر.', isOffline: true, code: 'offline');
+      }
       return _blockOffline();
-    } on HandshakeException {
+    } catch (e) {
+      if (e is PlatformApiException) rethrow;
+      if (paused) {
+        throw PlatformApiException('لا يوجد اتصال بالسيرفر.', isOffline: true, code: 'offline');
+      }
       return _blockOffline();
     }
 
@@ -173,20 +177,26 @@ class PlatformService {
     return data;
   }
 
-  Future<bool> heartbeat() async {
+  Future<bool> heartbeat({bool blockOnFailure = true}) async {
     if (sessionToken.isEmpty) return false;
+    if (paused && !blockOnFailure) return true;
     try {
       final res = await _client
           .post(_uri('/api/license/heartbeat'), headers: platformHeaders())
-          .timeout(httpTimeout);
+          .timeout(const Duration(seconds: 15));
       final json = await _decode(res);
       if (res.statusCode < 200 || res.statusCode >= 300 || json['ok'] == false) {
-        blockApp((json['message'] ?? 'الترخيص غير صالح.').toString(), (json['code'] ?? '').toString());
+        if (blockOnFailure) {
+          blockApp((json['message'] ?? 'الترخيص غير صالح.').toString(), (json['code'] ?? '').toString());
+        }
         return false;
       }
       return true;
     } catch (_) {
-      blockApp('لا يوجد اتصال بالسيرفر. التطبيق متوقف حتى عودة الاتصال.', 'offline');
+      if (paused && !blockOnFailure) return false;
+      if (blockOnFailure) {
+        blockApp('لا يوجد اتصال بالسيرفر. التطبيق متوقف حتى عودة الاتصال.', 'offline');
+      }
       return false;
     }
   }
@@ -195,6 +205,7 @@ class PlatformService {
     stopHeartbeat();
     heartbeat();
     _heartbeatTimer = Timer.periodic(const Duration(milliseconds: heartbeatMs), (_) {
+      if (paused) return;
       heartbeat();
     });
   }
@@ -209,7 +220,7 @@ class PlatformService {
     sessionToken = storage.sessionToken;
     licenseKey = storage.licenseKey;
     if (sessionToken.isEmpty) return false;
-    final ok = await heartbeat();
+    final ok = await heartbeat(blockOnFailure: true);
     if (!ok) return false;
     startHeartbeat();
     return true;

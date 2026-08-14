@@ -9,10 +9,12 @@ import 'screens/home_screen.dart';
 import 'screens/license_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/api_service.dart';
+import 'services/notification_service.dart';
 import 'services/platform_service.dart';
 import 'services/storage_service.dart';
 import 'state/app_controller.dart';
 import 'theme/app_theme.dart';
+import 'widgets/submit_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,20 +22,44 @@ Future<void> main() async {
   final storage = StorageService(prefs);
   final platform = PlatformService(storage);
   final api = ApiService(platform);
-  final app = AppController(platform: platform, api: api);
+  final notifications = NotificationService();
+  await notifications.init();
+  final app = AppController(platform: platform, api: api, notifications: notifications);
   runApp(WakeedApp(controller: app));
   app.boot();
 }
 
-class WakeedApp extends StatelessWidget {
+class WakeedApp extends StatefulWidget {
   const WakeedApp({super.key, required this.controller});
 
   final AppController controller;
 
   @override
+  State<WakeedApp> createState() => _WakeedAppState();
+}
+
+class _WakeedAppState extends State<WakeedApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.controller.handleLifecycle(state);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
-      value: controller,
+      value: widget.controller,
       child: Consumer<AppController>(
         builder: (context, app, _) {
           return MaterialApp(
@@ -52,7 +78,12 @@ class WakeedApp extends StatelessWidget {
             builder: (context, child) {
               return Directionality(
                 textDirection: TextDirection.rtl,
-                child: child ?? const SizedBox.shrink(),
+                child: Stack(
+                  children: [
+                    child ?? const SizedBox.shrink(),
+                    const SubmitOverlay(),
+                  ],
+                ),
               );
             },
             home: const _Gate(),

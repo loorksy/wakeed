@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants.dart';
@@ -23,5 +25,24 @@ class StorageService {
   Future<void> clearSession() async {
     await _prefs.remove(prefsSessionToken);
     await _prefs.remove(prefsLicenseKey);
+  }
+
+  Future<void> saveLastDialog(Map<String, dynamic>? data) async {
+    if (data == null) {
+      await _prefs.remove(prefsLastDialog);
+      return;
+    }
+    await _prefs.setString(prefsLastDialog, jsonEncode(data));
+  }
+
+  Map<String, dynamic>? loadLastDialog() {
+    final raw = _prefs.getString(prefsLastDialog);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return null;
   }
 }

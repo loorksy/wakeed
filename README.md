@@ -28,6 +28,7 @@ npm start
 - `download/` — صفحة تنزيل APK
 - `mobile/` — Capacitor Android (واجهة الويب المغلفة)
 - `flutter/` — تطبيق أندرويد الأصلي (الترخيص + سند الحوالة)
+- `web-app/` — واجهة Flutter للويب (تُخدم من `/`)
 - `deploy/` — nginx + systemd + دليل النشر
 
 ## الترخيص

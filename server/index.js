@@ -29,6 +29,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const CLIENT_DIR = path.join(ROOT, "client");
+const WEB_APP_DIR = path.join(ROOT, "web-app");
 const ADMIN_DIR = path.join(ROOT, "admin");
 const DOWNLOAD_DIR = path.join(ROOT, "download");
 const RELEASES_DIR = path.join(ROOT, "releases");
@@ -39,11 +40,22 @@ const HOST = process.env.HOST || "0.0.0.0";
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".wasm": "application/wasm",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".map": "application/json",
+  ".txt": "text/plain; charset=utf-8",
   ".apk": "application/vnd.android.package-archive",
 };
 
@@ -71,6 +83,22 @@ function safeFile(baseDir, urlPath) {
   const full = path.normalize(path.join(baseDir, rel.replace(/^\//, "")));
   if (!full.startsWith(baseDir)) return null;
   return full;
+}
+
+function appWebDir() {
+  if (fs.existsSync(path.join(WEB_APP_DIR, "index.html"))) return WEB_APP_DIR;
+  return CLIENT_DIR;
+}
+
+function serveExisting(res, filePath, fallbackDir) {
+  if (filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+    return serveStatic(res, filePath);
+  }
+  if (fallbackDir) {
+    const index = path.join(fallbackDir, "index.html");
+    if (fs.existsSync(index)) return serveStatic(res, index);
+  }
+  return fail(res, 404, "الملف غير موجود.");
 }
 
 function serveStatic(res, filePath) {
@@ -173,9 +201,17 @@ async function routeStatic(req, res, url) {
     return serveStatic(res, filePath);
   }
 
-  const filePath = safeFile(CLIENT_DIR, p);
+  if (p.startsWith("/legacy")) {
+    const sub = p.replace(/^\/legacy\/?/, "") || "index.html";
+    const filePath = safeFile(CLIENT_DIR, sub === "" ? "index.html" : sub);
+    if (!filePath) return fail(res, 403, "مسار غير صالح.");
+    return serveExisting(res, filePath, CLIENT_DIR);
+  }
+
+  const webDir = appWebDir();
+  const filePath = safeFile(webDir, p);
   if (!filePath) return fail(res, 403, "مسار غير صالح.");
-  return serveStatic(res, filePath);
+  return serveExisting(res, filePath, webDir);
 }
 
 const server = http.createServer(async (req, res) => {

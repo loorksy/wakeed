@@ -10,31 +10,9 @@ import '../widgets/account_picker.dart';
 import '../widgets/common.dart';
 import '../widgets/preview_table.dart';
 import '../widgets/settings_card.dart';
-import '../widgets/submit_dialog.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  DialogData? _shown;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final app = context.watch<AppController>();
-    if (app.lastDialog != null && app.lastDialog != _shown) {
-      _shown = app.lastDialog;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || app.lastDialog == null) return;
-        showAppDialog(context, app);
-      });
-    }
-    if (app.lastDialog == null) _shown = null;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +30,21 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const WakeedMark(size: 28),
             const SizedBox(width: 8),
-            const Text('وكيد', style: TextStyle(fontWeight: FontWeight.w800)),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('وكيد', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  if (app.displayUserName.isNotEmpty)
+                    Text(
+                      app.displayUserName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                ],
+              ),
+            ),
             const SizedBox(width: 8),
             Flexible(
               child: Container(

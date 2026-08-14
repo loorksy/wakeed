@@ -2,15 +2,7 @@
 
 تطبيق أندرويد لتسجيل سندات الحوالة في وكيد، مع تفعيل ترخيص ونبض حيّ عبر منصة الإنتاج.
 
-**لا يعمل بدون سيرفر.** عند انقطاع الشبكة أو إيقاف الترخيص يُحظر التطبيق فوراً.
-
-## المتطلبات
-
-- Flutter 3.32+ (Dart 3.8+)
-- Android SDK (API 24+)
-- JDK 17+
-
-المنصة: `https://wakeed.lork.cloud`
+**لا يعمل بدون سيرفر.** عند قطع الشبكة يُتحقق بالنبض قبل الحظر حتى لا تظهر شاشة التوقف خطأً عند العودة من الخلفية.
 
 ## التشغيل
 
@@ -20,6 +12,22 @@ flutter pub get
 flutter test
 flutter run
 ```
+
+لبناء واجهة الويب التي تُخدم من `/`:
+
+```bash
+flutter build web --release --base-href /
+rm -rf ../web-app && mkdir -p ../web-app
+cp -a build/web/. ../web-app/
+```
+
+## المتطلبات
+
+- Flutter 3.32+ (Dart 3.8+)
+- Android SDK (API 24+)
+- JDK 17+
+
+المنصة: `https://wakeed.lork.cloud`
 
 ## الشاشات
 
