@@ -112,17 +112,13 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
     final target = app.accountPickTarget;
     if (target.entryId != null) {
       if (target.type == 'credit') {
-        final entry = app.manualEntries.firstWhere((e) => e.id == target.entryId);
-        entry.credit = code;
-        app.updateManualEntry(entry);
+        app.applyManualAccount(target.entryId!, code);
       } else if (target.type == 'chargeCredit' || target.type == 'chargeDebit') {
-        final entry = app.chargeEntries.firstWhere((e) => e.id == target.entryId);
-        if (target.type == 'chargeCredit') {
-          entry.credit = code;
-        } else {
-          entry.debit = code;
-        }
-        app.updateChargeEntry(entry);
+        app.applyChargeAccount(
+          target.entryId!,
+          debit: target.type == 'chargeDebit',
+          code: code,
+        );
       } else if (target.type == 'profitCredit' || target.type == 'profitDebit') {
         app.applyProfitAccount(
           target.entryId!,

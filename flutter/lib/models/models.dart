@@ -148,6 +148,8 @@ class ManualEntry {
     this.debit = '',
     this.credit = '',
     this.note = '',
+    this.debitRate = '',
+    this.creditRate = '',
   });
 
   String id;
@@ -156,6 +158,8 @@ class ManualEntry {
   String debit;
   String credit;
   String note;
+  String debitRate;
+  String creditRate;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -164,6 +168,8 @@ class ManualEntry {
         'debit': debit,
         'credit': credit,
         'note': note,
+        'debitRate': debitRate,
+        'creditRate': creditRate,
       };
 
   factory ManualEntry.fromJson(Map<String, dynamic> json) {
@@ -174,6 +180,8 @@ class ManualEntry {
       debit: (json['debit'] ?? '').toString(),
       credit: (json['credit'] ?? '').toString(),
       note: (json['note'] ?? '').toString(),
+      debitRate: (json['debitRate'] ?? json['debit_rate'] ?? '').toString(),
+      creditRate: (json['creditRate'] ?? json['credit_rate'] ?? '').toString(),
     );
   }
 }

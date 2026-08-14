@@ -339,6 +339,117 @@ List<JournalRow> parseRowsFromTable(
   return rows;
 }
 
+num amountFromBase(num base, num hawalaRate, {int decimals = 2}) {
+  if (base == 0) return 0;
+  final rate = hawalaRate <= 0 ? 1 : hawalaRate;
+  final native = (rate - 1).abs() < 0.0000001 ? base : base * rate;
+  return roundMoney(native, decimals);
+}
+
+String formatJournalAmount(JournalRow row, {required bool debit}) {
+  final amount = debit ? row.debit : row.credit;
+  if (amount.trim().isEmpty) return '';
+  final badge = row.currencySymbol.trim().isNotEmpty ? row.currencySymbol : row.currencyCode;
+  return badge.isEmpty ? amount : '$amount $badge';
+}
+
+bool _isDebitLine(JournalRow row) => row.debit.trim().isNotEmpty && row.credit.trim().isEmpty;
+
+bool _isCreditLine(JournalRow row) => row.credit.trim().isNotEmpty && row.debit.trim().isEmpty;
+
+void attachRowCurrency(JournalRow row, CurrencyQuote quote, {String rateOverride = ''}) {
+  row.currencyId = quote.id;
+  row.currencyCode = quote.code;
+  row.currencySymbol = quote.symbol;
+  if (row.rate.trim().isNotEmpty) return;
+  final override = rateOverride.trim();
+  if (override.isNotEmpty) {
+    row.rate = override;
+    return;
+  }
+  row.rate = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+}
+
+/// Stamps each line with its account currency. If a debit/credit pair was entered
+/// with the same native amount but different currencies, the debit amount is
+/// converted so the voucher balances in base (USD). Different native amounts
+/// are left unchanged so current two-amount pastes keep working.
+List<JournalRow> applyRemittanceFx(
+  List<JournalRow> rows,
+  CurrencyQuote Function(String account) quoteOf, {
+  String Function(String account)? rateOf,
+}) {
+  for (final row in rows) {
+    if (row.account.trim().isEmpty) continue;
+    attachRowCurrency(
+      row,
+      quoteOf(row.account),
+      rateOverride: rateOf?.call(row.account) ?? '',
+    );
+  }
+  for (var i = 0; i + 1 < rows.length; i += 2) {
+    final left = rows[i];
+    final right = rows[i + 1];
+    if (left.balancing || right.balancing) continue;
+    JournalRow? debit;
+    JournalRow? credit;
+    if (_isDebitLine(left) && _isCreditLine(right)) {
+      debit = left;
+      credit = right;
+    } else if (_isCreditLine(left) && _isDebitLine(right)) {
+      credit = left;
+      debit = right;
+    } else {
+      continue;
+    }
+    final dAmt = num.tryParse(cleanAmount(debit.debit)) ?? 0;
+    final cAmt = num.tryParse(cleanAmount(credit.credit)) ?? 0;
+    if (dAmt <= 0 || cAmt <= 0) continue;
+    final dRate = parseHawalaRate(debit.rate);
+    final cRate = parseHawalaRate(credit.rate);
+    final mixed = debit.currencyCode.toUpperCase() != credit.currencyCode.toUpperCase() ||
+        (dRate - cRate).abs() > 0.0001;
+    if (!mixed) continue;
+    if ((dAmt - cAmt).abs() > 0.0001) continue;
+    final base = amountToBase(cAmt, cRate);
+    debit.debit = formatProfitAmount(amountFromBase(base, dRate));
+  }
+  return rows;
+}
+
+Map<String, num> fxTotals(List<JournalRow> rows) {
+  num debit = 0;
+  num credit = 0;
+  num debitBase = 0;
+  num creditBase = 0;
+  var hasFx = false;
+  for (final row in rows) {
+    if (row.balancing) continue;
+    final dAmt = num.tryParse(cleanAmount(row.debit)) ?? 0;
+    final cAmt = num.tryParse(cleanAmount(row.credit)) ?? 0;
+    final rate = parseHawalaRate(row.rate);
+    if ((rate - 1).abs() > 0.0001) hasFx = true;
+    if (dAmt > 0) {
+      debit += dAmt;
+      debitBase += amountToBase(dAmt, rate);
+    }
+    if (cAmt > 0) {
+      credit += cAmt;
+      creditBase += amountToBase(cAmt, rate);
+    }
+  }
+  debitBase = roundMoney(debitBase);
+  creditBase = roundMoney(creditBase);
+  return {
+    'debit': debit,
+    'credit': credit,
+    'debitBase': debitBase,
+    'creditBase': creditBase,
+    'diff': roundMoney(debitBase - creditBase),
+    'fx': hasFx ? 1 : 0,
+  };
+}
+
 List<CustomerGroup> groupCustomerRows(List<JournalRow>? rows) {
   final groups = <CustomerGroup>[];
   final list = rows ?? [];

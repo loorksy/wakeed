@@ -13,6 +13,7 @@ import '../widgets/account_name_field.dart';
 import '../widgets/common.dart';
 import '../widgets/preview_table.dart';
 import '../widgets/settings_card.dart';
+import '../widgets/fx_fields.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -176,7 +177,6 @@ class _BatchTabState extends State<BatchTab> {
     if (app.tableBatch.isEmpty && data.text.isNotEmpty) data.clear();
     if (app.notesBatch.isEmpty && notes.text.isNotEmpty) notes.clear();
     final rows = app.currentRows('batch');
-    final t = app.totals(rows);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,15 +234,13 @@ class _BatchTabState extends State<BatchTab> {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
+          JournalFxSummary(
+            rows: rows,
+            symbol: app.baseCurrencyQuote().symbol,
+            leading: [
               StatChip(label: 'عملاء', value: '${(rows.length / 2).ceil()}'),
               const SizedBox(width: 6),
               StatChip(label: 'أسطر', value: '${rows.length}'),
-              const SizedBox(width: 6),
-              StatChip(label: 'مدين', value: '${t['debit']}', color: WakeedColors.err),
-              const SizedBox(width: 6),
-              StatChip(label: 'دائن', value: '${t['credit']}', color: WakeedColors.green),
             ],
           ),
           const SizedBox(height: 8),
@@ -254,8 +252,8 @@ class _BatchTabState extends State<BatchTab> {
                   '${i + 1}',
                   app.composeNote(rows[i].description, app.sectionNote('batch')),
                   rows[i].account,
-                  rows[i].debit,
-                  rows[i].credit,
+                  formatJournalAmount(rows[i], debit: true),
+                  formatJournalAmount(rows[i], debit: false),
                   app.resolvedLabel(app.resolvedBatch, rows[i].account),
                 ],
             ],
@@ -299,7 +297,6 @@ class _EachTabState extends State<EachTab> {
     if (app.notesEach.isEmpty && notes.text.isNotEmpty) notes.clear();
     final rows = app.currentRows('each');
     final groups = groupCustomerRows(rows);
-    final t = app.totals(rows);
     final tableRows = <List<String>>[];
     var lineNo = 0;
     for (var gi = 0; gi < groups.length; gi++) {
@@ -310,8 +307,8 @@ class _EachTabState extends State<EachTab> {
           '$lineNo',
           app.composeNote(row.description, app.sectionNote('each')),
           row.account,
-          row.debit,
-          row.credit,
+          formatJournalAmount(row, debit: true),
+          formatJournalAmount(row, debit: false),
           app.resolvedLabel(app.resolvedEach, row.account),
         ]);
       }
@@ -373,15 +370,13 @@ class _EachTabState extends State<EachTab> {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
+          JournalFxSummary(
+            rows: rows,
+            symbol: app.baseCurrencyQuote().symbol,
+            leading: [
               StatChip(label: 'سندات', value: '${groups.length}'),
               const SizedBox(width: 6),
               StatChip(label: 'عملاء', value: '${groups.length}'),
-              const SizedBox(width: 6),
-              StatChip(label: 'مدين', value: '${t['debit']}', color: WakeedColors.err),
-              const SizedBox(width: 6),
-              StatChip(label: 'دائن', value: '${t['credit']}', color: WakeedColors.green),
             ],
           ),
           const SizedBox(height: 8),
@@ -404,7 +399,6 @@ class ManualTab extends StatelessWidget {
     app.ensureManualEntries();
     final rows = app.manualRows();
     final groups = groupCustomerRows(rows);
-    final t = app.totals(rows);
     final tableRows = <List<String>>[];
     var lineNo = 0;
     for (var gi = 0; gi < groups.length; gi++) {
@@ -415,8 +409,8 @@ class ManualTab extends StatelessWidget {
           '$lineNo',
           app.composeNote(row.description, row.clientNote),
           row.account,
-          row.debit,
-          row.credit,
+          formatJournalAmount(row, debit: true),
+          formatJournalAmount(row, debit: false),
           app.resolvedLabel(app.resolvedManual, row.account),
         ]);
       }
@@ -457,13 +451,11 @@ class ManualTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
+          JournalFxSummary(
+            rows: rows,
+            symbol: app.baseCurrencyQuote().symbol,
+            leading: [
               StatChip(label: 'سندات', value: '${groups.length}'),
-              const SizedBox(width: 6),
-              StatChip(label: 'مدين', value: '${t['debit']}', color: WakeedColors.err),
-              const SizedBox(width: 6),
-              StatChip(label: 'دائن', value: '${t['credit']}', color: WakeedColors.green),
             ],
           ),
           const SizedBox(height: 8),
@@ -491,6 +483,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   late final TextEditingController nameCtrl;
   late final TextEditingController amountCtrl;
   late final TextEditingController creditCtrl;
+  late final TextEditingController creditRateCtrl;
   late final TextEditingController noteCtrl;
 
   @override
@@ -499,6 +492,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     nameCtrl = TextEditingController(text: widget.entry.name);
     amountCtrl = TextEditingController(text: widget.entry.amount);
     creditCtrl = TextEditingController(text: widget.entry.credit);
+    creditRateCtrl = TextEditingController(text: widget.entry.creditRate);
     noteCtrl = TextEditingController(text: widget.entry.note);
   }
 
@@ -506,6 +500,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   void didUpdateWidget(covariant _ManualEntryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
+    if (creditRateCtrl.text != widget.entry.creditRate) creditRateCtrl.text = widget.entry.creditRate;
     if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
     if (amountCtrl.text != widget.entry.amount && widget.entry.amount.isEmpty) amountCtrl.clear();
     if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
@@ -516,16 +511,22 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     nameCtrl.dispose();
     amountCtrl.dispose();
     creditCtrl.dispose();
+    creditRateCtrl.dispose();
     noteCtrl.dispose();
     super.dispose();
   }
 
-  void _sync() {
+  void _sync({bool accountChanged = false}) {
     final app = context.read<AppController>();
+    if (accountChanged) {
+      final quote = app.currencyQuoteForAccount(creditCtrl.text);
+      creditRateCtrl.text = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+    }
     widget.entry
       ..name = nameCtrl.text
       ..amount = amountCtrl.text
       ..credit = creditCtrl.text
+      ..creditRate = creditRateCtrl.text
       ..note = noteCtrl.text;
     app.updateManualEntry(widget.entry);
   }
@@ -533,6 +534,18 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
+    final debitQ = app.currencyQuoteForAccount(app.debitAccount);
+    final amt = num.tryParse(cleanAmount(amountCtrl.text)) ?? 0;
+    final cRate = parseHawalaRate(
+      creditRateCtrl.text.isNotEmpty ? creditRateCtrl.text : app.defaultHawalaRateFor(creditCtrl.text),
+    );
+    final dRate = parseHawalaRate(
+      app.debitHawalaRate.isNotEmpty ? app.debitHawalaRate : app.defaultHawalaRateFor(app.debitAccount),
+    );
+    final creditBase = amountToBase(amt, cRate);
+    final debitBase = amountToBase(amountFromBase(creditBase, dRate), dRate);
+    final mixed = !creditQ.isBase || !debitQ.isBase;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -562,10 +575,11 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
           Row(
             children: [
               Expanded(
-                child: TextField(
+                child: FxAmountField(
                   controller: amountCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'المبلغ', hintText: '1500'),
+                  symbol: creditQ.badge,
+                  labelText: 'المبلغ',
+                  hintText: '1500',
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -574,7 +588,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
                 child: AccountNameField(
                   controller: creditCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: _sync,
+                  onChanged: () => _sync(accountChanged: true),
                 ),
               ),
               IconButton(
@@ -584,6 +598,24 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
               ),
             ],
           ),
+          if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            FxRateField(
+              controller: creditRateCtrl,
+              code: creditQ.code,
+              onChanged: (_) => _sync(),
+            ),
+          ],
+          if (mixed && amt > 0) ...[
+            const SizedBox(height: 8),
+            ProfitFxBar(
+              diff: roundMoney(debitBase - creditBase),
+              creditBase: creditBase,
+              debitBase: debitBase,
+              symbol: app.baseCurrencyQuote().symbol,
+              compact: true,
+            ),
+          ],
           const SizedBox(height: 6),
           TextField(
             controller: noteCtrl,
@@ -605,7 +637,6 @@ class ChargeTab extends StatelessWidget {
     app.ensureChargeEntries();
     final rows = app.chargeRows();
     final groups = groupCustomerRows(rows);
-    final t = app.totals(rows);
     final tableRows = <List<String>>[];
     var lineNo = 0;
     for (var gi = 0; gi < groups.length; gi++) {
@@ -616,8 +647,8 @@ class ChargeTab extends StatelessWidget {
           '$lineNo',
           app.composeNote(row.description, row.clientNote),
           row.account,
-          row.debit,
-          row.credit,
+          formatJournalAmount(row, debit: true),
+          formatJournalAmount(row, debit: false),
           app.resolvedLabel(app.resolvedCharge, row.account),
         ]);
       }
@@ -662,13 +693,11 @@ class ChargeTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
+          JournalFxSummary(
+            rows: rows,
+            symbol: app.baseCurrencyQuote().symbol,
+            leading: [
               StatChip(label: 'سندات', value: '${groups.length}'),
-              const SizedBox(width: 6),
-              StatChip(label: 'مدين', value: '${t['debit']}', color: WakeedColors.err),
-              const SizedBox(width: 6),
-              StatChip(label: 'دائن', value: '${t['credit']}', color: WakeedColors.green),
             ],
           ),
           const SizedBox(height: 8),
@@ -696,7 +725,9 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
   late final TextEditingController nameCtrl;
   late final TextEditingController amountCtrl;
   late final TextEditingController debitCtrl;
+  late final TextEditingController debitRateCtrl;
   late final TextEditingController creditCtrl;
+  late final TextEditingController creditRateCtrl;
   late final TextEditingController noteCtrl;
 
   @override
@@ -705,7 +736,9 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     nameCtrl = TextEditingController(text: widget.entry.name);
     amountCtrl = TextEditingController(text: widget.entry.amount);
     debitCtrl = TextEditingController(text: widget.entry.debit);
+    debitRateCtrl = TextEditingController(text: widget.entry.debitRate);
     creditCtrl = TextEditingController(text: widget.entry.credit);
+    creditRateCtrl = TextEditingController(text: widget.entry.creditRate);
     noteCtrl = TextEditingController(text: widget.entry.note);
   }
 
@@ -714,6 +747,8 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     super.didUpdateWidget(oldWidget);
     if (debitCtrl.text != widget.entry.debit) debitCtrl.text = widget.entry.debit;
     if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
+    if (debitRateCtrl.text != widget.entry.debitRate) debitRateCtrl.text = widget.entry.debitRate;
+    if (creditRateCtrl.text != widget.entry.creditRate) creditRateCtrl.text = widget.entry.creditRate;
     if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
     if (amountCtrl.text != widget.entry.amount && widget.entry.amount.isEmpty) amountCtrl.clear();
     if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
@@ -724,18 +759,30 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     nameCtrl.dispose();
     amountCtrl.dispose();
     debitCtrl.dispose();
+    debitRateCtrl.dispose();
     creditCtrl.dispose();
+    creditRateCtrl.dispose();
     noteCtrl.dispose();
     super.dispose();
   }
 
-  void _sync() {
+  void _sync({bool debitChanged = false, bool creditChanged = false}) {
     final app = context.read<AppController>();
+    if (debitChanged) {
+      final quote = app.currencyQuoteForAccount(debitCtrl.text);
+      debitRateCtrl.text = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+    }
+    if (creditChanged) {
+      final quote = app.currencyQuoteForAccount(creditCtrl.text);
+      creditRateCtrl.text = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+    }
     widget.entry
       ..name = nameCtrl.text
       ..amount = amountCtrl.text
       ..debit = debitCtrl.text
+      ..debitRate = debitRateCtrl.text
       ..credit = creditCtrl.text
+      ..creditRate = creditRateCtrl.text
       ..note = noteCtrl.text;
     app.updateChargeEntry(widget.entry);
   }
@@ -743,6 +790,18 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
+    final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
+    final amt = num.tryParse(cleanAmount(amountCtrl.text)) ?? 0;
+    final cRate = parseHawalaRate(
+      creditRateCtrl.text.isNotEmpty ? creditRateCtrl.text : app.defaultHawalaRateFor(creditCtrl.text),
+    );
+    final dRate = parseHawalaRate(
+      debitRateCtrl.text.isNotEmpty ? debitRateCtrl.text : app.defaultHawalaRateFor(debitCtrl.text),
+    );
+    final creditBase = amountToBase(amt, cRate);
+    final debitBase = amountToBase(amountFromBase(creditBase, dRate), dRate);
+    final mixed = !creditQ.isBase || !debitQ.isBase;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -769,10 +828,11 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
             onChanged: (_) => _sync(),
           ),
           const SizedBox(height: 6),
-          TextField(
+          FxAmountField(
             controller: amountCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'المبلغ', hintText: '1500'),
+            symbol: creditQ.badge.isNotEmpty ? creditQ.badge : debitQ.badge,
+            labelText: 'المبلغ',
+            hintText: '1500',
             onChanged: (_) => _sync(),
           ),
           const SizedBox(height: 6),
@@ -782,7 +842,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
                 child: AccountNameField(
                   controller: debitCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: _sync,
+                  onChanged: () => _sync(debitChanged: true),
                   debit: true,
                 ),
               ),
@@ -793,6 +853,15 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
             ],
           ),
+          if (!debitQ.isBase && debitCtrl.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            FxRateField(
+              controller: debitRateCtrl,
+              debit: true,
+              code: debitQ.code,
+              onChanged: (_) => _sync(),
+            ),
+          ],
           const SizedBox(height: 6),
           Row(
             children: [
@@ -800,7 +869,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
                 child: AccountNameField(
                   controller: creditCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: _sync,
+                  onChanged: () => _sync(creditChanged: true),
                 ),
               ),
               IconButton(
@@ -810,6 +879,24 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
             ],
           ),
+          if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            FxRateField(
+              controller: creditRateCtrl,
+              code: creditQ.code,
+              onChanged: (_) => _sync(),
+            ),
+          ],
+          if (mixed && amt > 0) ...[
+            const SizedBox(height: 8),
+            ProfitFxBar(
+              diff: roundMoney(debitBase - creditBase),
+              creditBase: creditBase,
+              debitBase: debitBase,
+              symbol: app.baseCurrencyQuote().symbol,
+              compact: true,
+            ),
+          ],
           const SizedBox(height: 6),
           TextField(
             controller: noteCtrl,

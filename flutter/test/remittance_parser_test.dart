@@ -238,4 +238,52 @@ void main() {
       expect(rows[2].currencyCode, 'USD');
     });
   });
+
+  group('applyRemittanceFx', () {
+    CurrencyQuote quoteOf(String code) {
+      if (code == '1731') {
+        return const CurrencyQuote(id: 'try', code: 'TRY', symbol: 'T', hawalaRate: 47.77, isBase: false);
+      }
+      return const CurrencyQuote(id: 'usd', code: 'USD', symbol: '\$', hawalaRate: 1, isBase: true);
+    }
+
+    test('same currency keeps equal amounts', () {
+      final rows = applyRemittanceFx(
+        parseRowsFromTable('احمد\t1500\t9830', '555', '9830'),
+        quoteOf,
+      );
+      expect(rows[0].debit, '1500');
+      expect(rows[1].credit, '1500');
+      expect(fxTotals(rows)['diff'], 0);
+      expect(fxTotals(rows)['fx'], 0);
+    });
+
+    test('converts equal TRY amount into USD on the debit line', () {
+      final rows = applyRemittanceFx(
+        [
+          JournalRow(account: '9830', description: 'ا', debit: '3384', credit: ''),
+          JournalRow(account: '1731', description: 'ا', debit: '', credit: '3384'),
+        ],
+        quoteOf,
+      );
+      expect(rows[1].credit, '3384');
+      expect(rows[1].currencySymbol, 'T');
+      expect(rows[0].debit, '70.84');
+      expect(rows[0].currencySymbol, '\$');
+      expect(fxTotals(rows)['diff'], 0);
+      expect(fxTotals(rows)['debitBase'], 70.84);
+    });
+
+    test('different native amounts are not overwritten', () {
+      final rows = applyRemittanceFx(
+        [
+          JournalRow(account: '555', description: 'ا', debit: '1500', credit: ''),
+          JournalRow(account: '9830', description: 'ا', debit: '', credit: '1200'),
+        ],
+        quoteOf,
+      );
+      expect(rows[0].debit, '1500');
+      expect(rows[1].credit, '1200');
+    });
+  });
 }

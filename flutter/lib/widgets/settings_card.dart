@@ -7,6 +7,7 @@ import '../state/app_controller.dart';
 import '../theme/app_theme.dart';
 import 'account_picker.dart';
 import 'common.dart';
+import 'fx_fields.dart';
 
 class SettingsCard extends StatelessWidget {
   const SettingsCard({super.key});
@@ -141,39 +142,97 @@ class DebitAccountField extends StatelessWidget {
     final app = context.watch<AppController>();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('حساب المدين', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WakeedColors.err)),
-                const SizedBox(height: 4),
-                InkWell(
-                  onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
-                  child: InputDecorator(
-                    decoration: partyFieldDecoration(
-                      debit: true,
-                      base: SettingsCard.dense,
-                      suffixIcon: Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.err),
-                      suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      [
+                        'حساب المدين',
+                        if (app.currencyQuoteForAccount(app.debitAccount).badge.isNotEmpty)
+                          app.currencyQuoteForAccount(app.debitAccount).badge,
+                      ].join(' '),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WakeedColors.err),
                     ),
-                    child: Text(
-                      app.debitAccountLabel(),
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: WakeedColors.err, fontSize: 12),
+                    const SizedBox(height: 4),
+                    InkWell(
+                      onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
+                      child: InputDecorator(
+                        decoration: partyFieldDecoration(
+                          debit: true,
+                          base: SettingsCard.dense,
+                          suffixIcon: Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.err),
+                          suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                        child: Text(
+                          app.debitAccountLabel(),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: WakeedColors.err, fontSize: 12),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: app.saveDebitDefault,
+                child: const Text('حفظ افتراضي'),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: app.saveDebitDefault,
-            child: const Text('حفظ افتراضي'),
-          ),
+          const _DebitRateBox(),
         ],
+      ),
+    );
+  }
+}
+
+class _DebitRateBox extends StatefulWidget {
+  const _DebitRateBox();
+
+  @override
+  State<_DebitRateBox> createState() => _DebitRateBoxState();
+}
+
+class _DebitRateBoxState extends State<_DebitRateBox> {
+  late final TextEditingController rateCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    rateCtrl = TextEditingController(text: context.read<AppController>().debitHawalaRate);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final app = context.read<AppController>();
+    if (rateCtrl.text != app.debitHawalaRate) rateCtrl.text = app.debitHawalaRate;
+  }
+
+  @override
+  void dispose() {
+    rateCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    final quote = app.currencyQuoteForAccount(app.debitAccount);
+    if (quote.isBase || app.debitAccount.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: FxRateField(
+        controller: rateCtrl,
+        debit: true,
+        code: quote.code,
+        onChanged: app.setDebitHawalaRate,
       ),
     );
   }

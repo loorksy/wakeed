@@ -35,6 +35,7 @@ class AppController extends ChangeNotifier {
   String ownerKey = '';
   String debitAccount = '';
   String pendingDebitCode = '';
+  String debitHawalaRate = '';
   String entryDate = todayInputValue();
   String journalTypeId = '';
   String costCenterId = '';
@@ -441,6 +442,7 @@ class AppController extends ChangeNotifier {
       'ownerKey': ownerKey,
       'username': username,
       'debitAccount': debitAccount,
+      'debitHawalaRate': debitHawalaRate,
       'debitDefaults': debitDefaults,
       'notes': notesBatch,
       'notesEach': notesEach,
@@ -486,6 +488,7 @@ class AppController extends ChangeNotifier {
         debitDefaults = (settings['debitDefaults'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
       }
       if (settings['debitAccount'] != null) pendingDebitCode = settings['debitAccount'].toString();
+      if (settings['debitHawalaRate'] != null) debitHawalaRate = settings['debitHawalaRate'].toString();
       if (settings['notes'] != null) notesBatch = settings['notes'].toString();
       if (settings['notesEach'] != null) notesEach = settings['notesEach'].toString();
       if (settings['userDisplayName'] != null) {
@@ -715,6 +718,9 @@ class AppController extends ChangeNotifier {
       );
       debitAccount = pickAccountCode(fallback);
     }
+    if (debitHawalaRate.trim().isEmpty) {
+      debitHawalaRate = defaultHawalaRateFor(debitAccount);
+    }
     _emit();
   }
 
@@ -892,8 +898,30 @@ class AppController extends ChangeNotifier {
     if (value.isEmpty) return;
     debitAccount = value;
     pendingDebitCode = value;
+    debitHawalaRate = defaultHawalaRateFor(value);
     saveLocal();
     _emit();
+  }
+
+  void setDebitHawalaRate(String value) {
+    debitHawalaRate = value;
+    scheduleSaveLocal();
+    _emit();
+  }
+
+  String rateOverrideForAccount(String code) {
+    if (normalizeAccountKey(code) == normalizeAccountKey(debitAccount) && debitHawalaRate.trim().isNotEmpty) {
+      return debitHawalaRate;
+    }
+    return '';
+  }
+
+  List<JournalRow> withAccountFx(List<JournalRow> rows) {
+    return applyRemittanceFx(
+      rows,
+      currencyQuoteForAccount,
+      rateOf: rateOverrideForAccount,
+    );
   }
 
   void saveDebitDefault() {
@@ -1046,7 +1074,7 @@ class AppController extends ChangeNotifier {
   List<JournalRow> currentRows(String source) {
     final debitAcc = debitAccount.trim();
     final text = source == 'each' ? tableEach : tableBatch;
-    return parseRowsFromTable(text, debitAcc, defaultCreditAccount);
+    return withAccountFx(parseRowsFromTable(text, debitAcc, defaultCreditAccount));
   }
 
   Map<String, num> totals(List<JournalRow> rows) {
@@ -1135,6 +1163,7 @@ class AppController extends ChangeNotifier {
         debit: amt,
         credit: '',
         clientNote: clientNote,
+        rate: entry.debitRate,
       ));
       rows.add(JournalRow(
         account: credit,
@@ -1142,9 +1171,10 @@ class AppController extends ChangeNotifier {
         debit: '',
         credit: amt,
         clientNote: clientNote,
+        rate: entry.creditRate,
       ));
     }
-    return rows;
+    return withAccountFx(rows);
   }
 
   void clearChargeForm() {
@@ -1328,6 +1358,7 @@ class AppController extends ChangeNotifier {
         debit: amt,
         credit: '',
         clientNote: clientNote,
+        rate: entry.debitRate,
       ));
       rows.add(JournalRow(
         account: credit,
@@ -1335,9 +1366,34 @@ class AppController extends ChangeNotifier {
         debit: '',
         credit: amt,
         clientNote: clientNote,
+        rate: entry.creditRate,
       ));
     }
-    return rows;
+    return withAccountFx(rows);
+  }
+
+  void applyManualAccount(String entryId, String code) {
+    final i = manualEntries.indexWhere((e) => e.id == entryId);
+    if (i < 0) return;
+    final entry = manualEntries[i];
+    entry.credit = code;
+    entry.creditRate = defaultHawalaRateFor(code);
+    updateManualEntry(entry);
+  }
+
+  void applyChargeAccount(String entryId, {required bool debit, required String code}) {
+    final i = chargeEntries.indexWhere((e) => e.id == entryId);
+    if (i < 0) return;
+    final entry = chargeEntries[i];
+    final rate = defaultHawalaRateFor(code);
+    if (debit) {
+      entry.debit = code;
+      entry.debitRate = rate;
+    } else {
+      entry.credit = code;
+      entry.creditRate = rate;
+    }
+    updateChargeEntry(entry);
   }
 
   Future<dynamic> resolveAccount(String query) async {
@@ -1539,9 +1595,9 @@ class AppController extends ChangeNotifier {
       }));
     }
 
-    final t = totals(rows);
-    if (section != 'profit' && ((t['debit']! - t['credit']!).abs()) > 0.001) {
-      throw PlatformApiException('القيد غير متوازن: مدين ${t['debit']} ≠ دائن ${t['credit']}');
+    final fx = fxTotals(rows);
+    if (section != 'profit' && ((fx['debitBase']! - fx['creditBase']!).abs()) > 0.001) {
+      throw PlatformApiException('القيد غير متوازن: مدين ${fx['debitBase']} ≠ دائن ${fx['creditBase']}');
     }
 
     final journalNotes = notes ?? ((section == 'manual' || section == 'charge' || section == 'profit') ? '' : sectionNote(section));
