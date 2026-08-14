@@ -85,7 +85,7 @@ class JournalFxSummary extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'المبالغ بعملة كل حساب — الفرق حسب تسعيرة وكيد',
+            'المبالغ بعملة كل حساب — الفرق حسب أسعار صرف الحوالات',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ] else

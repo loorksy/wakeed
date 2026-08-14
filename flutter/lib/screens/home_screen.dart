@@ -988,7 +988,7 @@ class _ProfitTabState extends State<ProfitTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. التصريف من تسعيرة وكيد.',
+              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. التصريف من أسعار صرف الحوالات في وكيد.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -1049,7 +1049,7 @@ class _ProfitTabState extends State<ProfitTab> {
           if ((pt['fx'] ?? 0) > 0) ...[
             const SizedBox(height: 4),
             Text(
-              'الفرق بالدولار حسب تسعيرة وكيد',
+              'الفرق بالدولار حسب أسعار صرف الحوالات',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

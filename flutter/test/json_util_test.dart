@@ -41,9 +41,29 @@ void main() {
       expect(pickCurrencyRate({'CurrencyRate': 47.5, 'Equality': 47.77}), 47.77);
     });
 
-    test('uses Rate when it is the live quote', () {
-      expect(pickCurrencyRate({'Rate': 47.77}), 47.77);
-      expect(pickCurrencyRate({'rate': 0.020933}), closeTo(0.020933, 0.000001));
+    test('uses lastRate from hawala exchange prices over card equivalent 47.5', () {
+      final tryCurrency = {
+        'code': 'T',
+        'rate': 0.0210526315789473,
+        'lastRate': 0.0209336403600586,
+        'equivalent': 47.5,
+      };
+      expect(pickCurrencyRate(tryCurrency), closeTo(0.0209336403600586, 0.0000000001));
+      expect(amountToBaseFromQuote(
+        3384,
+        CurrencyQuote(
+          code: 'T',
+          symbol: 'T',
+          hawalaRate: hawalaRateFromApi(pickCurrencyRate(tryCurrency)),
+          apiRate: pickCurrencyRate(tryCurrency),
+          isBase: false,
+        ),
+      ), 70.84);
+      expect(roundMoney(72 - 70.84), 1.16);
+    });
+
+    test('falls back to rate when lastRate is 0', () {
+      expect(pickCurrencyRate({'rate': 0.001724, 'lastRate': 0, 'equivalent': 580}), closeTo(0.001724, 0.0000001));
     });
   });
 }

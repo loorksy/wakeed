@@ -274,11 +274,15 @@ String pickCurrencySymbol(dynamic currency) {
 
 num pickCurrencyRate(dynamic currency) {
   if (currency is! Map) return 1;
+  final last = numOf(currency['lastRate'] ?? currency['LastRate'] ?? currency['last_rate']);
+  if (last > 0) return last;
   const keys = [
     'Rate',
     'rate',
     'Equality',
     'equality',
+    'equivalent',
+    'Equivalent',
     'CurrencyEquality',
     'currencyEquality',
     'Equal',
