@@ -64,6 +64,16 @@
     <div class="spin"></div>
   </div>
   <script>
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (reg) { reg.unregister(); });
+      });
+    }
+    if (window.caches) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (key) { caches.delete(key); });
+      });
+    }
     window.addEventListener('flutter-first-frame', function () {
       var el = document.getElementById('boot');
       if (el) el.remove();
