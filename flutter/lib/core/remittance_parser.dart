@@ -344,7 +344,7 @@ List<ProfitPasteRow> parseProfitTable(dynamic text) {
       final dName = cells[3];
       final dAcc = cells[4];
       final dVal = cleanAmount(cells[5]);
-      final name = cName.isNotEmpty ? cName : dName;
+      final name = dName.isNotEmpty ? dName : cName;
       if (cAcc.isEmpty || dAcc.isEmpty || cVal.isEmpty || dVal.isEmpty) continue;
       rows.add(ProfitPasteRow(
         name: name,
@@ -399,7 +399,7 @@ String formatProfitSigned(num diff) {
 }
 
 String profitKindLabel(num diff) {
-  if (diff > 0.001) return 'ربح';
+  if (diff > 0.001) return 'ربح للمدين';
   if (diff < -0.001) return 'كسر';
   return 'فرق';
 }

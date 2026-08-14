@@ -1873,8 +1873,6 @@ class AppController extends ChangeNotifier {
   }
 
   String profitPartyLabel(ProfitPasteRow row) {
-    final name = row.name.trim();
-    if (name.isNotEmpty && !RegExp(r'^\S+\s*/\s*\S+$').hasMatch(name)) return name;
     final resolved = resolvedLabel(resolvedProfit, row.debit);
     if (resolved.isNotEmpty && resolved != 'لم يُحل بعد') return resolved;
     return row.debit.trim();

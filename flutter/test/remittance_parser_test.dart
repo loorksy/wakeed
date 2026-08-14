@@ -119,6 +119,7 @@ void main() {
       expect(profitPasteTotals([
         ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
       ])['diff'], 100);
+      expect(profitKindLabel(100), 'ربح للمدين');
       expect(profitForLabel(100, 'احمد'), 'لصالح احمد');
     });
 
@@ -132,6 +133,7 @@ void main() {
       expect(rows[0].debit, '400');
       expect(rows[1].credit, '500');
       expect(formatProfitSigned(-100), '100-');
+      expect(profitKindLabel(-100), 'كسر');
       expect(profitForLabel(-100, 'احمد'), 'على احمد');
     });
 

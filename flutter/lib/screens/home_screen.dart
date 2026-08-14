@@ -1089,6 +1089,9 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final c = num.tryParse(cleanAmount(creditAmtCtrl.text)) ?? 0;
     final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
     final profit = d - c;
+    final debitResolved = app.resolvedLabel(app.resolvedProfit, debitCtrl.text);
+    final debitWho = debitResolved == 'لم يُحل بعد' ? debitCtrl.text.trim() : debitResolved;
+    final forText = profitForLabel(profit, debitWho);
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
@@ -1118,15 +1121,9 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                                 : WakeedColors.accent,
                       ),
                     ),
-                    if (profitForLabel(
-                      profit,
-                      nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : debitCtrl.text.trim(),
-                    ).isNotEmpty)
+                    if (forText.isNotEmpty)
                       Text(
-                        profitForLabel(
-                          profit,
-                          nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : debitCtrl.text.trim(),
-                        ),
+                        forText,
                         style: TextStyle(
                           fontSize: 11,
                           color: profit > 0.001
