@@ -65,6 +65,7 @@ class AppController extends ChangeNotifier {
   dynamic currency;
   List<dynamic> currencies = [];
   final Map<String, num> _liveHawalaByCurrencyId = {};
+  final Map<String, num> _liveHawalaByCurrencyCode = {};
   dynamic sampleDetail;
   dynamic sampleEntry;
   List<dynamic> accounts = [];
@@ -820,6 +821,7 @@ class AppController extends ChangeNotifier {
         code: resolvedCode,
         symbol: currencySymbolFor(resolvedCode, pickCurrencySymbol(currency)),
         hawalaRate: 1,
+        apiRate: 1,
         isBase: true,
       );
     }
@@ -834,17 +836,39 @@ class AppController extends ChangeNotifier {
     return null;
   }
 
+  Map<String, dynamic>? _currencyByCode(String code) {
+    final needle = code.trim().toUpperCase();
+    if (needle.isEmpty) return null;
+    for (final item in currencies) {
+      if (item is! Map) continue;
+      if (pickCurrencyCode(item).toUpperCase() == needle) return Map<String, dynamic>.from(item);
+    }
+    return null;
+  }
+
   CurrencyQuote currencyQuoteOf(dynamic acc) {
     final base = baseCurrencyQuote();
     if (acc == null) return base;
     final nested = pickAccountCurrency(acc);
     final id = pickAccountCurrencyId(acc);
-    var cur = id.isNotEmpty ? _currencyById(id) : null;
-    cur ??= nested;
+    final codeOnAcc = acc is Map
+        ? (acc['CurrencyCode'] ?? acc['currencyCode'] ?? pickCurrencyCode(nested)).toString().trim()
+        : pickCurrencyCode(nested);
+    final symbolOnAcc = acc is Map
+        ? (acc['CurrencySymbol'] ?? acc['currencySymbol'] ?? acc['Symbol'] ?? pickCurrencySymbol(nested))
+            .toString()
+            .trim()
+        : pickCurrencySymbol(nested);
+    var catalog = id.isNotEmpty ? _currencyById(id) : null;
+    catalog ??= _currencyByCode(codeOnAcc);
+    catalog ??= _currencyByCode(pickCurrencyCode(nested));
+    Map<String, dynamic>? cur;
+    if (catalog != null && nested != null) {
+      cur = {...nested, ...catalog};
+    } else {
+      cur = catalog ?? nested;
+    }
     if (cur == null && acc is Map) {
-      final codeOnAcc = (acc['CurrencyCode'] ?? acc['currencyCode'] ?? '').toString().trim();
-      final symbolOnAcc =
-          (acc['CurrencySymbol'] ?? acc['currencySymbol'] ?? acc['Symbol'] ?? '').toString().trim();
       final rateOnAcc = acc['CurrencyRate'] ?? acc['currencyRate'];
       if (id.isNotEmpty || codeOnAcc.isNotEmpty) {
         cur = {
@@ -866,9 +890,13 @@ class AppController extends ChangeNotifier {
     final apiRate = pickCurrencyRate(cur);
     var hawala = hawalaRateFromApi(apiRate, isBase: isBase);
     if (!isBase) {
-      final live = _liveHawalaByCurrencyId[curId];
-      if (live != null && live > 1.0001 && ((hawala - 1).abs() < 0.0001 || hawala <= 0)) {
-        hawala = live;
+      final live = _liveHawalaByCurrencyId[curId] ??
+          (code.isNotEmpty ? _liveHawalaByCurrencyCode[code.toUpperCase()] : null) ??
+          (codeOnAcc.isNotEmpty ? _liveHawalaByCurrencyCode[codeOnAcc.toUpperCase()] : null);
+      if (live != null && live > 1.0001) {
+        if ((hawala - 1).abs() < 0.0001 || hawala <= 0 || (hawalaLooksRounded(hawala) && !hawalaLooksRounded(live))) {
+          hawala = live;
+        }
       }
     }
     final resolvedCode = code.isNotEmpty ? code : (isBase ? base.code : '');
@@ -877,6 +905,7 @@ class AppController extends ChangeNotifier {
       code: resolvedCode,
       symbol: currencySymbolFor(resolvedCode, pickCurrencySymbol(cur)),
       hawalaRate: isBase ? 1 : hawala,
+      apiRate: isBase ? 1 : apiRate,
       isBase: isBase,
     );
   }
@@ -892,18 +921,28 @@ class AppController extends ChangeNotifier {
     final details = asList(entry['JournalEntryDetails'] ?? entry['journalEntryDetails']);
     for (final d in details) {
       if (d is! Map) continue;
-      final id = (d['currencyID'] ??
+      var id = (d['currencyID'] ??
               d['CurrencyID'] ??
               d['currencyId'] ??
               d['CurrencyId'] ??
               '')
           .toString()
           .trim();
+      var code = (d['CurrencyCode'] ?? d['currencyCode'] ?? '').toString().trim();
+      final curField = d['Currency'] ?? d['currency'];
+      if (curField is Map) {
+        if (code.isEmpty) code = pickCurrencyCode(curField);
+        if (id.isEmpty) id = pickId(curField);
+      } else if (code.isEmpty && curField != null) {
+        code = curField.toString().trim();
+      }
       final raw = d['Equality'] ?? d['equality'] ?? d['rate'] ?? d['Rate'];
       final n = numOf(raw);
-      if (id.isEmpty || n == 0) continue;
+      if (n == 0) continue;
       final hawala = hawalaRateFromApi(n);
-      if (hawala > 1.0001) _liveHawalaByCurrencyId[id] = hawala;
+      if (hawala <= 1.0001) continue;
+      if (id.isNotEmpty) _liveHawalaByCurrencyId[id] = hawala;
+      if (code.isNotEmpty) _liveHawalaByCurrencyCode[code.toUpperCase()] = hawala;
     }
   }
 

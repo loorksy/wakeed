@@ -89,6 +89,7 @@ class CurrencyQuote {
     this.code = '',
     this.symbol = '',
     this.hawalaRate = 1,
+    this.apiRate = 0,
     this.isBase = true,
   });
 
@@ -96,9 +97,10 @@ class CurrencyQuote {
   final String code;
   final String symbol;
   final num hawalaRate;
+  final num apiRate;
   final bool isBase;
 
-  static const usd = CurrencyQuote(code: 'USD', symbol: '\$', hawalaRate: 1, isBase: true);
+  static const usd = CurrencyQuote(code: 'USD', symbol: '\$', hawalaRate: 1, apiRate: 1, isBase: true);
 
   String get badge => symbol.trim().isNotEmpty ? symbol : (code.trim().isNotEmpty ? code : '');
 }
@@ -133,6 +135,21 @@ num amountToBase(num amount, num hawalaRate, {int decimals = 2}) {
 num hawalaPostRate(num hawalaRate) {
   if (hawalaRate <= 0 || (hawalaRate - 1).abs() < 0.0000001) return 1;
   return 1 / hawalaRate;
+}
+
+bool hawalaLooksRounded(num n) {
+  if (n <= 1.0001) return false;
+  final doubled = n * 2;
+  return (doubled - doubled.roundToDouble()).abs() < 0.0001;
+}
+
+num amountToBaseFromQuote(num amount, CurrencyQuote quote, {int decimals = 2}) {
+  if (amount == 0) return 0;
+  if (quote.isBase) return roundMoney(amount, decimals);
+  if (quote.apiRate > 0 && quote.apiRate < 1 && !hawalaLooksRounded(quote.hawalaRate)) {
+    return roundMoney(amount * quote.apiRate, decimals);
+  }
+  return amountToBase(amount, quote.hawalaRate, decimals: decimals);
 }
 
 String currencySymbolFor(String code, [String apiSymbol = '']) {

@@ -528,10 +528,8 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
     final debitQ = app.currencyQuoteForAccount(app.debitAccount);
     final amt = num.tryParse(cleanAmount(amountCtrl.text)) ?? 0;
-    final cRate = creditQ.isBase ? 1 : creditQ.hawalaRate;
-    final dRate = debitQ.isBase ? 1 : debitQ.hawalaRate;
-    final creditBase = amountToBase(amt, cRate);
-    final debitBase = amountToBase(amountFromBase(creditBase, dRate), dRate);
+    final creditBase = amountToBaseFromQuote(amt, creditQ);
+    final debitBase = amountToBaseFromQuote(amountFromBase(creditBase, debitQ.isBase ? 1 : debitQ.hawalaRate), debitQ);
     final mixed = !creditQ.isBase || !debitQ.isBase;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -755,10 +753,8 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
     final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
     final amt = num.tryParse(cleanAmount(amountCtrl.text)) ?? 0;
-    final cRate = creditQ.isBase ? 1 : creditQ.hawalaRate;
-    final dRate = debitQ.isBase ? 1 : debitQ.hawalaRate;
-    final creditBase = amountToBase(amt, cRate);
-    final debitBase = amountToBase(amountFromBase(creditBase, dRate), dRate);
+    final creditBase = amountToBaseFromQuote(amt, creditQ);
+    final debitBase = amountToBaseFromQuote(amountFromBase(creditBase, debitQ.isBase ? 1 : debitQ.hawalaRate), debitQ);
     final mixed = !creditQ.isBase || !debitQ.isBase;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1188,10 +1184,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
     final c = num.tryParse(cleanAmount(creditAmtCtrl.text)) ?? 0;
     final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
-    final cRate = creditQ.isBase ? 1 : creditQ.hawalaRate;
-    final dRate = debitQ.isBase ? 1 : debitQ.hawalaRate;
-    final creditBase = amountToBase(c, cRate);
-    final debitBase = amountToBase(d, dRate);
+    final creditBase = amountToBaseFromQuote(c, creditQ);
+    final debitBase = amountToBaseFromQuote(d, debitQ);
     final profit = roundMoney(debitBase - creditBase);
     final debitWho = app.chartAccountName(debitCtrl.text);
     final baseSymbol = app.baseCurrencyQuote().symbol;
@@ -1273,9 +1267,12 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
           if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty && c > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '${formatProfitAmount(c)} ${creditQ.badge} = ${formatProfitAmount(creditBase)} $baseSymbol',
-                style: const TextStyle(fontSize: 11, color: WakeedColors.green),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: Text(
+                  '${formatProfitAmount(c)} ${creditQ.badge} = ${formatProfitAmount(creditBase)} $baseSymbol',
+                  style: const TextStyle(fontSize: 11, color: WakeedColors.green),
+                ),
               ),
             ),
           const SizedBox(height: 6),
@@ -1306,9 +1303,12 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
           if (!debitQ.isBase && debitCtrl.text.trim().isNotEmpty && d > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '${formatProfitAmount(d)} ${debitQ.badge} = ${formatProfitAmount(debitBase)} $baseSymbol',
-                style: const TextStyle(fontSize: 11, color: WakeedColors.err),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: Text(
+                  '${formatProfitAmount(d)} ${debitQ.badge} = ${formatProfitAmount(debitBase)} $baseSymbol',
+                  style: const TextStyle(fontSize: 11, color: WakeedColors.err),
+                ),
               ),
             ),
           if (c > 0 || d > 0) ...[

@@ -178,6 +178,21 @@ void main() {
       expect(roundMoney(72 - 70.84), 1.16);
     });
 
+    test('3384 TRY at API factor 0.020933 equals native 70.84 not 71.24', () {
+      const quote = CurrencyQuote(
+        id: 'try',
+        code: 'TRY',
+        symbol: 'T',
+        hawalaRate: 47.77,
+        apiRate: 0.020933,
+        isBase: false,
+      );
+      expect(amountToBaseFromQuote(3384, quote), 70.84);
+      expect(roundMoney(72 - 70.84), 1.16);
+      expect(hawalaLooksRounded(47.5), isTrue);
+      expect(hawalaLooksRounded(47.77), isFalse);
+    });
+
     test('catalog rate overwrites a saved 47.5 so profit is 1.16', () {
       final row = JournalRow(
         account: '1731',

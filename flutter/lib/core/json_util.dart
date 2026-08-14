@@ -106,6 +106,8 @@ List<dynamic> asList(dynamic data) {
   if (data == null) return [];
   if (data is List) return data;
   if (data is Map) {
+    final newtonsoft = data[r'$values'];
+    if (newtonsoft is List) return newtonsoft;
     for (final key in [
       'JournalEntryData',
       'journalEntryData',
@@ -122,6 +124,7 @@ List<dynamic> asList(dynamic data) {
     ]) {
       final v = data[key];
       if (v is List) return v;
+      if (v is Map && v[r'$values'] is List) return v[r'$values'] as List;
     }
     if (data['Id'] != null || data['id'] != null) return [data];
   }
@@ -271,9 +274,9 @@ String pickCurrencySymbol(dynamic currency) {
 
 num pickCurrencyRate(dynamic currency) {
   if (currency is! Map) return 1;
-  num? firstNonOne;
-  num? firstAny;
   const keys = [
+    'Rate',
+    'rate',
     'Equality',
     'equality',
     'CurrencyEquality',
@@ -284,22 +287,28 @@ num pickCurrencyRate(dynamic currency) {
     'exchangeRate',
     'CurrencyRate',
     'currencyRate',
-    'Rate',
-    'rate',
     'Price',
     'price',
   ];
+  final values = <num>[];
   for (final key in keys) {
     if (!currency.containsKey(key) || currency[key] == null) continue;
     final n = numOf(currency[key]);
-    if (n == 0) continue;
-    firstAny ??= n;
-    if ((n - 1).abs() > 0.0000001) {
-      firstNonOne ??= n;
-      break;
-    }
+    if (n > 0) values.add(n);
   }
-  return firstNonOne ?? firstAny ?? 1;
+  for (final n in values) {
+    if (n < 1) return n;
+  }
+  final quotes = values.where((n) => (n - 1).abs() > 0.0000001).toList();
+  if (quotes.isEmpty) return values.isEmpty ? 1 : values.first;
+  quotes.sort((a, b) => _fracDigits(b).compareTo(_fracDigits(a)));
+  return quotes.first;
+}
+
+int _fracDigits(num n) {
+  final s = n.toStringAsFixed(6).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  final i = s.indexOf('.');
+  return i < 0 ? 0 : s.length - i - 1;
 }
 
 String todayInputValue() {
