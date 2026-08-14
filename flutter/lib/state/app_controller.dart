@@ -721,26 +721,63 @@ class AppController extends ChangeNotifier {
     return 'يُحمَّل الدليل بعد الدخول';
   }
 
+  bool _accountCodeMatches(String left, String right) {
+    final a = normalizeAccountKey(left);
+    final b = normalizeAccountKey(right);
+    if (a.isEmpty || b.isEmpty) return false;
+    if (a == b) return true;
+    final an = int.tryParse(a);
+    final bn = int.tryParse(b);
+    return an != null && bn != null && an == bn;
+  }
+
+  dynamic _accountByCode(String key) {
+    if (key.isEmpty) return null;
+    final cached = accountCache[key];
+    if (cached != null) return cached;
+    for (final entry in accountCache.entries) {
+      if (_accountCodeMatches(entry.key, key)) return entry.value;
+    }
+    for (final a in accounts) {
+      if (_accountCodeMatches(pickAccountCode(a), key)) return a;
+    }
+    for (final map in [resolvedProfit, resolvedCharge, resolvedManual, resolvedEach, resolvedBatch]) {
+      if (map == null) continue;
+      final direct = map[key];
+      if (direct != null) return direct;
+      for (final entry in map.entries) {
+        if (_accountCodeMatches(entry.key, key)) return entry.value;
+      }
+    }
+    return null;
+  }
+
+  void _rememberResolved(Map<String, dynamic> resolved) {
+    for (final entry in resolved.entries) {
+      if (entry.key.isEmpty || entry.value == null) continue;
+      accountCache[entry.key] = entry.value;
+      final code = pickAccountCode(entry.value);
+      if (code.isNotEmpty) accountCache[code] = entry.value;
+    }
+  }
+
   String chartAccountName(String code) {
     final key = normalizeAccountKey(code);
     if (key.isEmpty) return '';
-    dynamic acc = accountCache[key];
-    if (acc == null) {
-      for (final a in accounts) {
-        if (pickAccountCode(a) == key) {
-          acc = a;
-          break;
-        }
-      }
-    }
-    acc ??= resolvedProfit?[key] ??
-        resolvedCharge?[key] ??
-        resolvedManual?[key] ??
-        resolvedEach?[key] ??
-        resolvedBatch?[key];
+    final acc = _accountByCode(key);
     if (acc != null) {
       final name = accountNameOf(acc);
-      if (name.isNotEmpty) return name;
+      if (name.isNotEmpty && name != key) return name;
+    }
+    for (final map in [resolvedProfit, resolvedCharge, resolvedManual, resolvedEach, resolvedBatch]) {
+      final label = resolvedLabel(map, key);
+      if (label.isEmpty || label == 'لم يُحل بعد') continue;
+      final sep = label.indexOf(' — ');
+      if (sep >= 0) {
+        final name = label.substring(sep + 3).trim();
+        if (name.isNotEmpty) return name;
+      }
+      if (label != key) return label;
     }
     return '';
   }
@@ -1796,6 +1833,7 @@ class AppController extends ChangeNotifier {
     _emit();
     try {
       final resolved = await resolveRows(rows);
+      _rememberResolved(resolved);
       if (isProfit) {
         resolvedProfit = resolved;
       } else if (isCharge) {

@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../state/app_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/account_picker.dart';
+import '../widgets/account_name_field.dart';
 import '../widgets/common.dart';
 import '../widgets/preview_table.dart';
 import '../widgets/settings_card.dart';
@@ -532,7 +533,6 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
-    final creditWho = app.chartAccountName(creditCtrl.text);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -571,13 +571,10 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: TextField(
+                child: AccountNameField(
                   controller: creditCtrl,
-                  decoration: InputDecoration(
-                    labelText: creditWho.isNotEmpty ? creditWho : 'الدائن',
-                    hintText: '9830',
-                  ),
-                  onChanged: (_) => _sync(),
+                  fallbackLabel: 'الحساب',
+                  onChanged: _sync,
                 ),
               ),
               IconButton(
@@ -746,8 +743,6 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
-    final debitWho = app.chartAccountName(debitCtrl.text);
-    final creditWho = app.chartAccountName(creditCtrl.text);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -784,13 +779,10 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
           Row(
             children: [
               Expanded(
-                child: TextField(
+                child: AccountNameField(
                   controller: debitCtrl,
-                  decoration: InputDecoration(
-                    labelText: debitWho.isNotEmpty ? debitWho : 'المدين',
-                    hintText: 'رمز الحساب',
-                  ),
-                  onChanged: (_) => _sync(),
+                  fallbackLabel: 'الحساب',
+                  onChanged: _sync,
                 ),
               ),
               IconButton(
@@ -804,13 +796,10 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
           Row(
             children: [
               Expanded(
-                child: TextField(
+                child: AccountNameField(
                   controller: creditCtrl,
-                  decoration: InputDecoration(
-                    labelText: creditWho.isNotEmpty ? creditWho : 'الدائن',
-                    hintText: 'رمز الحساب',
-                  ),
-                  onChanged: (_) => _sync(),
+                  fallbackLabel: 'الحساب',
+                  onChanged: _sync,
                 ),
               ),
               IconButton(
@@ -864,7 +853,7 @@ class _ProfitTabState extends State<ProfitTab> {
     if (app.tableProfit.isEmpty && data.text.isNotEmpty) data.clear();
     if (app.notesProfit.isEmpty && notes.text.isNotEmpty) notes.clear();
     app.ensureProfitEntries();
-    final rows = app.profitRows();
+    final rows = app.profitRows().where((r) => !r.balancing).toList();
     final groups = profitLedgerGroups(rows);
     final t = app.totals(rows);
     final paste = app.currentProfitPaste();
@@ -1105,7 +1094,6 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
     final profit = d - c;
     final debitWho = app.chartAccountName(debitCtrl.text);
-    final creditWho = app.chartAccountName(creditCtrl.text);
     final forText = debitWho;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -1163,15 +1151,16 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
             children: [
               Expanded(
                 flex: 3,
-                child: TextField(
+                child: AccountNameField(
                   controller: creditCtrl,
-                  decoration: _dense.copyWith(labelText: creditWho.isNotEmpty ? creditWho : 'الدائن'),
-                  onChanged: (_) => _sync(),
+                  fallbackLabel: 'الحساب',
+                  onChanged: _sync,
+                  dense: true,
                 ),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                tooltip: 'اختر الدائن',
+                tooltip: 'اختر الحساب',
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.profitCredit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, size: 18),
               ),
@@ -1180,7 +1169,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: TextField(
                   controller: creditAmtCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: _dense.copyWith(labelText: creditWho.isNotEmpty ? 'مبلغ $creditWho' : 'مبلغ الدائن'),
+                  decoration: _dense.copyWith(labelText: 'المبلغ'),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -1191,15 +1180,16 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
             children: [
               Expanded(
                 flex: 3,
-                child: TextField(
+                child: AccountNameField(
                   controller: debitCtrl,
-                  decoration: _dense.copyWith(labelText: debitWho.isNotEmpty ? debitWho : 'المدين'),
-                  onChanged: (_) => _sync(),
+                  fallbackLabel: 'الحساب',
+                  onChanged: _sync,
+                  dense: true,
                 ),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                tooltip: 'اختر المدين',
+                tooltip: 'اختر الحساب',
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.profitDebit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, size: 18),
               ),
@@ -1208,7 +1198,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: TextField(
                   controller: debitAmtCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: _dense.copyWith(labelText: debitWho.isNotEmpty ? 'مبلغ $debitWho' : 'مبلغ المدين'),
+                  decoration: _dense.copyWith(labelText: 'المبلغ'),
                   onChanged: (_) => _sync(),
                 ),
               ),

@@ -104,18 +104,20 @@ void main() {
   });
 
   group('buildProfitJournalRows', () {
-    test('sends exactly two written lines to Wakeed', () {
+    test('balances profit on the debit account so Wakeed accepts the voucher', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
         ],
       );
-      expect(rows.length, 2);
+      expect(rows.length, 3);
       expect(rows[0].account, '555');
       expect(rows[0].debit, '500');
       expect(rows[1].account, '9830');
       expect(rows[1].credit, '400');
-      expect(rows.any((r) => r.balancing), false);
+      expect(rows[2].balancing, true);
+      expect(rows[2].account, '555');
+      expect(rows[2].credit, '100');
       expect(profitPasteTotals([
         ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
       ])['diff'], 100);
@@ -123,15 +125,18 @@ void main() {
       expect(profitForLabel(100, 'احمد'), 'لصالح احمد');
     });
 
-    test('كسر keeps two written lines and labels على المدين', () {
+    test('كسر balances extra on the debit account', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '500', debit: '555', debitAmount: '400'),
         ],
       );
-      expect(rows.length, 2);
+      expect(rows.length, 3);
       expect(rows[0].debit, '400');
       expect(rows[1].credit, '500');
+      expect(rows[2].balancing, true);
+      expect(rows[2].account, '555');
+      expect(rows[2].debit, '100');
       expect(formatProfitSigned(-100), '100-');
       expect(profitKindLabel(-100), 'كسر');
       expect(profitForLabel(-100, 'احمد'), 'على احمد');

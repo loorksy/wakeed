@@ -436,6 +436,31 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
       clientNote: note,
       groupKey: key,
     ));
+    final debitVal = num.tryParse(dAmt) ?? 0;
+    final creditVal = num.tryParse(cAmt) ?? 0;
+    final profit = debitVal - creditVal;
+    if (profit.abs() <= 0.001) continue;
+    if (profit > 0) {
+      rows.add(JournalRow(
+        account: item.debit.trim(),
+        description: name,
+        debit: '',
+        credit: formatProfitAmount(profit),
+        clientNote: note,
+        groupKey: key,
+        balancing: true,
+      ));
+    } else {
+      rows.add(JournalRow(
+        account: item.debit.trim(),
+        description: name,
+        debit: formatProfitAmount(-profit),
+        credit: '',
+        clientNote: note,
+        groupKey: key,
+        balancing: true,
+      ));
+    }
   }
   return rows;
 }

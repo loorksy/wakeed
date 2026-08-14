@@ -37,8 +37,17 @@ String pickAccountCode(dynamic acc) {
 }
 
 String accountNameOf(dynamic acc) {
-  final v = _read(acc, ['AccountName', 'accountName', 'Name', 'name']);
-  return v == null ? '' : v.toString();
+  final v = _read(acc, [
+    'AccountName',
+    'accountName',
+    'DisplayName',
+    'displayName',
+    'FullName',
+    'fullName',
+    'Name',
+    'name',
+  ]);
+  return v == null ? '' : v.toString().trim();
 }
 
 String accountLabel(dynamic acc) {
