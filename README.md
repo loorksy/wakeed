@@ -2,6 +2,8 @@
 
 تطبيق ويب للصق بيانات سندات الحوالات من Excel وإرسالها إلى [Wakeed API](https://docs.wakeed.app/) عبر `POST /api/JournalVoucher`.
 
+**مباشر:** [https://wakeed.lork.cloud](https://wakeed.lork.cloud)
+
 ## المميزات
 
 - تسجيل الدخول إلى وكيد (Bearer token)

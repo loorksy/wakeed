@@ -2,11 +2,18 @@ import express from 'express';
 import cors from 'cors';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 8787;
 const WAKEED_BASE = process.env.WAKEED_BASE_URL || 'https://server1.wakeed.app';
 const BUILD_NUMBER = process.env.WAKEED_BUILD_NUMBER || '12000';
+const WEB_DIST = process.env.WEB_DIST || path.join(__dirname, '../web/dist');
 
 app.use(cors());
 app.use(express.json({ limit: '15mb' }));
@@ -474,6 +481,17 @@ app.post('/api/import/remittances', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Wakeed remittance import API on http://localhost:${PORT}`);
+if (fs.existsSync(WEB_DIST)) {
+  app.use(express.static(WEB_DIST, { index: false, maxAge: '1h' }));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(WEB_DIST, 'index.html'));
+  });
+}
+
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`Wakeed remittance import on http://127.0.0.1:${PORT}`);
+  if (fs.existsSync(WEB_DIST)) {
+    console.log(`Serving frontend from ${WEB_DIST}`);
+  }
 });
