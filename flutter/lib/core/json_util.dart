@@ -109,12 +109,16 @@ List<dynamic> asList(dynamic data) {
     for (final key in [
       'JournalEntryData',
       'journalEntryData',
+      'Currencies',
+      'currencies',
       'Items',
       'items',
       'Data',
       'data',
       'Result',
       'result',
+      'Value',
+      'value',
     ]) {
       final v = data[key];
       if (v is List) return v;
@@ -267,10 +271,35 @@ String pickCurrencySymbol(dynamic currency) {
 
 num pickCurrencyRate(dynamic currency) {
   if (currency is! Map) return 1;
-  final n = numOf(
-    currency['Rate'] ?? currency['rate'] ?? currency['ExchangeRate'] ?? currency['exchangeRate'] ?? 1,
-  );
-  return n == 0 ? 1 : n;
+  num? firstNonOne;
+  num? firstAny;
+  const keys = [
+    'Equality',
+    'equality',
+    'CurrencyEquality',
+    'currencyEquality',
+    'Equal',
+    'equal',
+    'ExchangeRate',
+    'exchangeRate',
+    'CurrencyRate',
+    'currencyRate',
+    'Rate',
+    'rate',
+    'Price',
+    'price',
+  ];
+  for (final key in keys) {
+    if (!currency.containsKey(key) || currency[key] == null) continue;
+    final n = numOf(currency[key]);
+    if (n == 0) continue;
+    firstAny ??= n;
+    if ((n - 1).abs() > 0.0000001) {
+      firstNonOne ??= n;
+      break;
+    }
+  }
+  return firstNonOne ?? firstAny ?? 1;
 }
 
 String todayInputValue() {

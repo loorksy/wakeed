@@ -520,7 +520,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     final app = context.read<AppController>();
     if (accountChanged) {
       final quote = app.currencyQuoteForAccount(creditCtrl.text);
-      creditRateCtrl.text = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+      creditRateCtrl.text = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
     }
     widget.entry
       ..name = nameCtrl.text
@@ -770,11 +770,11 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     final app = context.read<AppController>();
     if (debitChanged) {
       final quote = app.currencyQuoteForAccount(debitCtrl.text);
-      debitRateCtrl.text = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+      debitRateCtrl.text = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
     }
     if (creditChanged) {
       final quote = app.currencyQuoteForAccount(creditCtrl.text);
-      creditRateCtrl.text = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+      creditRateCtrl.text = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
     }
     widget.entry
       ..name = nameCtrl.text
@@ -1215,11 +1215,11 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final app = context.read<AppController>();
     if (creditAccountChanged) {
       final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
-      creditRateCtrl.text = creditQ.isBase ? '' : formatProfitAmount(creditQ.hawalaRate);
+      creditRateCtrl.text = creditQ.isBase ? '' : formatHawalaRate(creditQ.hawalaRate);
     }
     if (debitAccountChanged) {
       final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
-      debitRateCtrl.text = debitQ.isBase ? '' : formatProfitAmount(debitQ.hawalaRate);
+      debitRateCtrl.text = debitQ.isBase ? '' : formatHawalaRate(debitQ.hawalaRate);
     }
     widget.entry
       ..name = nameCtrl.text
@@ -1239,7 +1239,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     if (creditCtrl.text.trim().isNotEmpty && creditRateCtrl.text.isEmpty) {
       final quote = app.currencyQuoteForAccount(creditCtrl.text);
       if (!quote.isBase) {
-        creditRateCtrl.text = formatProfitAmount(quote.hawalaRate);
+        creditRateCtrl.text = formatHawalaRate(quote.hawalaRate);
         widget.entry.creditRate = creditRateCtrl.text;
         changed = true;
       }
@@ -1247,7 +1247,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     if (debitCtrl.text.trim().isNotEmpty && debitRateCtrl.text.isEmpty) {
       final quote = app.currencyQuoteForAccount(debitCtrl.text);
       if (!quote.isBase) {
-        debitRateCtrl.text = formatProfitAmount(quote.hawalaRate);
+        debitRateCtrl.text = formatHawalaRate(quote.hawalaRate);
         widget.entry.debitRate = debitRateCtrl.text;
         changed = true;
       }
@@ -1406,7 +1406,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '${formatProfitAmount(c)} ${creditQ.badge} = ${formatProfitAmount(creditBase)} $baseSymbol',
+                  '${formatProfitAmount(c)} ${creditQ.badge} ÷ ${formatHawalaRate(cRate)} = ${formatProfitAmount(creditBase)} $baseSymbol',
                   style: const TextStyle(fontSize: 11, color: WakeedColors.green),
                 ),
               ),
@@ -1443,7 +1443,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '${formatProfitAmount(d)} ${debitQ.badge} = ${formatProfitAmount(debitBase)} $baseSymbol',
+                  '${formatProfitAmount(d)} ${debitQ.badge} ÷ ${formatHawalaRate(dRate)} = ${formatProfitAmount(debitBase)} $baseSymbol',
                   style: const TextStyle(fontSize: 11, color: WakeedColors.err),
                 ),
               ),

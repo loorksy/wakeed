@@ -367,7 +367,7 @@ void attachRowCurrency(JournalRow row, CurrencyQuote quote, {String rateOverride
     row.rate = override;
     return;
   }
-  row.rate = quote.isBase ? '' : formatProfitAmount(quote.hawalaRate);
+  row.rate = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
 }
 
 /// Stamps each line with its account currency. If a debit/credit pair was entered
@@ -520,6 +520,14 @@ class ProfitPasteRow {
 String formatProfitAmount(num n) {
   if (n == n.roundToDouble()) return n.round().toString();
   var s = n.toStringAsFixed(4);
+  s = s.replaceFirst(RegExp(r'0+$'), '');
+  if (s.endsWith('.')) s = s.substring(0, s.length - 1);
+  return s;
+}
+
+String formatHawalaRate(num n) {
+  if (n == n.roundToDouble()) return n.round().toString();
+  var s = n.toStringAsFixed(6);
   s = s.replaceFirst(RegExp(r'0+$'), '');
   if (s.endsWith('.')) s = s.substring(0, s.length - 1);
   return s;

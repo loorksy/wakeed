@@ -572,6 +572,11 @@ class AppController extends ChangeNotifier {
       sampleEntry = results[3];
       final accountsRaw = results[4];
       currencies = asList(results[5]);
+      if (currencies.isEmpty) {
+        try {
+          currencies = asList(await _api('GET', '/api/Currency/GetAll'));
+        } catch (_) {}
+      }
 
       journalTypes = types is List ? types : [];
       costCenters = flattenCostCenters(centers is List ? centers : []);
@@ -867,7 +872,7 @@ class AppController extends ChangeNotifier {
   String defaultHawalaRateFor(String accountCode) {
     final quote = currencyQuoteForAccount(accountCode);
     if (quote.isBase) return '';
-    return formatProfitAmount(quote.hawalaRate);
+    return formatHawalaRate(quote.hawalaRate);
   }
 
   void applyProfitAccount(String entryId, {required bool debit, required String code}) {
@@ -1257,10 +1262,10 @@ class AppController extends ChangeNotifier {
     final base = baseCurrencyQuote();
     final debitRate = row.debitRate.trim().isNotEmpty
         ? row.debitRate
-        : (debitQ.isBase ? '' : formatProfitAmount(debitQ.hawalaRate));
+        : (debitQ.isBase ? '' : formatHawalaRate(debitQ.hawalaRate));
     final creditRate = row.creditRate.trim().isNotEmpty
         ? row.creditRate
-        : (creditQ.isBase ? '' : formatProfitAmount(creditQ.hawalaRate));
+        : (creditQ.isBase ? '' : formatHawalaRate(creditQ.hawalaRate));
     return ProfitPasteRow(
       name: row.name,
       credit: row.credit,
@@ -1508,10 +1513,10 @@ class AppController extends ChangeNotifier {
     final baseRate = numOf(currency is Map ? (currency['Rate'] ?? currency['rate'] ?? 1) : 1);
     final hawala = parseHawalaRate(row.rate);
     final currencyId = row.currencyId.isNotEmpty ? row.currencyId : baseCurrencyId;
-    // Wakeed voucher lines store the quote as foreign units per 1 USD (47.77 T = 1$),
-    // then show equivalent = amount / rate. USD stays 1.
+    // UI uses hawala (47.77 T per $1). Wakeed's Rate field is typically
+    // multiply-to-base (1/47.77) so 3384 T * Rate ≈ 70.84 USD.
     final rate = row.rate.trim().isNotEmpty
-        ? hawala
+        ? hawalaPostRate(hawala)
         : (baseRate == 0 ? 1 : baseRate);
     final equivalent = amountToBase(amount, row.rate.trim().isNotEmpty ? hawala : 1);
     final accountId = pickId(account);

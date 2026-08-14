@@ -178,6 +178,12 @@ void main() {
       expect(roundMoney(72 - 70.84), 1.16);
     });
 
+    test('keeps hawala quote precision so 47.77 is not flattened to 47.5', () {
+      expect(formatHawalaRate(47.77), '47.77');
+      expect(formatHawalaRate(47.76962), '47.76962');
+      expect(hawalaPostRate(47.77), closeTo(0.020933, 0.00001));
+    });
+
     test('profit is in USD not TRY', () {
       final totals = profitPasteTotals([
         ProfitPasteRow(

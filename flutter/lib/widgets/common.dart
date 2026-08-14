@@ -129,15 +129,18 @@ class ProfitFxBar extends StatelessWidget {
     }
 
     final unit = symbol.trim().isEmpty ? '' : ' $symbol';
-    final diffColor = diff < -0.001 ? WakeedColors.err : diff > 0.001 ? WakeedColors.green : WakeedColors.err;
-    return Row(
-      children: [
-        box('مدين', '${formatProfitAmount(debitBase)}$unit', WakeedColors.pink),
-        const SizedBox(width: 6),
-        box('دائن', '${formatProfitAmount(creditBase)}$unit', WakeedColors.green),
-        const SizedBox(width: 6),
-        box('فرق', '${formatProfitSigned(diff)}$unit', diffColor),
-      ],
+    // Native سند حوالة footer is visual LTR: مدين | دائن | فرق, with فرق always red.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        children: [
+          box('مدين', '${formatProfitAmount(debitBase)}$unit', WakeedColors.pink),
+          const SizedBox(width: 6),
+          box('دائن', '${formatProfitAmount(creditBase)}$unit', WakeedColors.green),
+          const SizedBox(width: 6),
+          box('فرق', '${formatProfitAmount(diff.abs())}$unit', WakeedColors.err),
+        ],
+      ),
     );
   }
 }
