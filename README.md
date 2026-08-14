@@ -25,6 +25,20 @@ npm run dev
 - الواجهة: `http://localhost:5173`
 - الـ API الوسيط: `http://localhost:8787`
 
+## النشر على VPS
+
+التطبيق منشور على `wakeed.lork.cloud` عبر:
+
+- Nginx + Let's Encrypt
+- PM2 (`wakeed-import` على المنفذ `3030`)
+- المسار: `/var/www/wakeed.lork.cloud`
+
+لإعادة النشر من المستودع على السيرفر:
+
+```bash
+bash deploy/deploy.sh
+```
+
 ## أعمدة اللصق المقترحة
 
 | العمود | المعنى |

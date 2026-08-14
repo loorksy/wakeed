@@ -47,7 +47,26 @@ async function parseWakeedResponse(res) {
   } catch {
     data = { raw: text };
   }
-  return { ok: res.ok, status: res.status, data };
+
+  // Wakeed sometimes returns a bare JSON string as the body.
+  if (typeof data === 'string') {
+    data = { message: data, success: false };
+  }
+
+  const bodySuccess = data && typeof data === 'object' ? data.success : undefined;
+  const ok = res.ok && bodySuccess !== false;
+  return { ok, status: res.status, data };
+}
+
+function wakeedErrorMessage(data, fallback = 'فشل الطلب من وكيد') {
+  if (!data) return fallback;
+  if (typeof data === 'string' && data.trim()) return data;
+  if (typeof data.message === 'string' && data.message.trim()) return data.message;
+  if (typeof data.Message === 'string' && data.Message.trim()) return data.Message;
+  if (typeof data.title === 'string' && data.title.trim()) return data.title;
+  if (typeof data.error === 'string' && data.error.trim()) return data.error;
+  if (typeof data.raw === 'string' && data.raw.trim()) return data.raw;
+  return fallback;
 }
 
 function appendObjectToForm(form, obj, prefix = '') {
@@ -141,9 +160,9 @@ app.post('/api/auth/login', async (req, res) => {
 
     const result = await parseWakeedResponse(response);
     if (!result.ok) {
-      return res.status(result.status).json({
+      return res.status(result.status >= 400 ? result.status : 400).json({
         success: false,
-        message: result.data?.message || 'فشل تسجيل الدخول',
+        message: wakeedErrorMessage(result.data, 'فشل تسجيل الدخول'),
         data: result.data,
       });
     }
@@ -161,7 +180,7 @@ app.get('/api/auth/subscriptions', async (req, res) => {
     if (!result.ok) {
       return res.status(result.status).json({
         success: false,
-        message: result.data?.message || 'تعذر جلب الاشتراكات',
+        message: wakeedErrorMessage(result.data, 'تعذر جلب الاشتراكات'),
         data: result.data,
       });
     }
@@ -177,7 +196,7 @@ app.get('/api/auth/profile', async (req, res) => {
     res.status(result.status).json({
       success: result.ok,
       data: result.data?.data ?? result.data,
-      message: result.ok ? undefined : result.data?.message,
+      message: result.ok ? undefined : wakeedErrorMessage(result.data),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -200,7 +219,7 @@ app.get('/api/lookups/journal-types', async (req, res) => {
     res.status(result.status).json({
       success: result.ok,
       data: list,
-      message: result.ok ? undefined : result.data?.message || 'تعذر جلب أنواع السندات',
+      message: result.ok ? undefined : wakeedErrorMessage(result.data, 'تعذر جلب أنواع السندات'),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -219,7 +238,7 @@ app.get('/api/lookups/currencies', async (req, res) => {
     res.status(result.status).json({
       success: result.ok,
       data: list,
-      message: result.ok ? undefined : result.data?.message,
+      message: result.ok ? undefined : wakeedErrorMessage(result.data),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -238,7 +257,7 @@ app.get('/api/lookups/cost-centers', async (req, res) => {
     res.status(result.status).json({
       success: result.ok,
       data: list,
-      message: result.ok ? undefined : result.data?.message,
+      message: result.ok ? undefined : wakeedErrorMessage(result.data),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -280,7 +299,7 @@ app.get('/api/lookups/accounts', async (req, res) => {
     res.status(result.status).json({
       success: result.ok,
       data: list,
-      message: result.ok ? undefined : result.data?.message,
+      message: result.ok ? undefined : wakeedErrorMessage(result.data),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -310,7 +329,7 @@ app.get('/api/remittances', async (req, res) => {
     res.status(result.status).json({
       success: result.ok,
       data: result.data?.data ?? result.data,
-      message: result.ok ? undefined : result.data?.message,
+      message: result.ok ? undefined : wakeedErrorMessage(result.data),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -469,10 +488,15 @@ app.post('/api/import/remittances', async (req, res) => {
     }
 
     const successCount = results.filter((r) => r.ok).length;
+    const failCount = results.length - successCount;
     res.json({
       success: successCount === results.length,
       successCount,
-      failCount: results.length - successCount,
+      failCount,
+      message:
+        failCount === 0
+          ? `تم إنشاء ${successCount} سند حوالة`
+          : `اكتمل مع أخطاء: نجح ${successCount} وفشل ${failCount}`,
       results,
     });
   } catch (error) {

@@ -289,7 +289,16 @@ function RemittanceImport({
         VoucherRate: Number(defaultRate) || 1,
       })
       setResults(res.results || [])
-      setSummary({ ok: res.successCount, fail: res.failCount })
+      setSummary({
+        ok: res.successCount ?? 0,
+        fail: res.failCount ?? (res.results || []).filter((r) => !r.ok).length,
+      })
+      if (res.message && res.failCount) {
+        setResults((prev) => [
+          ...prev,
+          { index: -1, ok: false, message: res.message || 'اكتمل مع أخطاء' },
+        ])
+      }
     } catch (err) {
       setSummary({ ok: 0, fail: mappedRows.length })
       setResults([
