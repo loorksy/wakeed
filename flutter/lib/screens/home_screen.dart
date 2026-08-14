@@ -1041,8 +1041,10 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
 
   static const _dense = InputDecoration(
     isDense: true,
-    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
   );
+
+  static const _fieldStyle = TextStyle(fontSize: 12, height: 1.2);
 
   @override
   void initState() {
@@ -1171,7 +1173,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: TextField(
                   controller: creditAmtCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: _dense.copyWith(labelText: 'المبلغ'),
+                  style: _fieldStyle,
+                  decoration: _dense.copyWith(hintText: 'المبلغ'),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -1200,7 +1203,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: TextField(
                   controller: debitAmtCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: _dense.copyWith(labelText: 'المبلغ'),
+                  style: _fieldStyle,
+                  decoration: _dense.copyWith(hintText: 'المبلغ'),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -1212,7 +1216,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               Expanded(
                 child: TextField(
                   controller: nameCtrl,
-                  decoration: _dense.copyWith(labelText: 'الاسم', hintText: 'اختياري'),
+                  style: _fieldStyle,
+                  decoration: _dense.copyWith(hintText: 'الاسم'),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -1220,7 +1225,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               Expanded(
                 child: TextField(
                   controller: noteCtrl,
-                  decoration: _dense.copyWith(labelText: 'البيان', hintText: 'اختياري'),
+                  style: _fieldStyle,
+                  decoration: _dense.copyWith(hintText: 'البيان'),
                   onChanged: (_) => _sync(),
                 ),
               ),

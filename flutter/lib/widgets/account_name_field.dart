@@ -76,15 +76,16 @@ class _AccountNameFieldState extends State<AccountNameField> {
       if (mounted) _syncDisplay();
     });
     final dense = widget.dense
-        ? const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8))
+        ? const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6))
         : const InputDecoration();
     return TextField(
       controller: _display,
       focusNode: _focus,
+      style: const TextStyle(fontSize: 12, height: 1.2),
       decoration: dense.copyWith(
-        labelText: name.isNotEmpty ? name : widget.fallbackLabel,
-        hintText: widget.fallbackLabel,
-        floatingLabelBehavior: name.isNotEmpty ? FloatingLabelBehavior.always : FloatingLabelBehavior.auto,
+        labelText: name.isNotEmpty && _focus.hasFocus ? name : null,
+        hintText: name.isEmpty ? widget.fallbackLabel : null,
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
       ),
       onChanged: (value) {
         if (!_focus.hasFocus) return;
