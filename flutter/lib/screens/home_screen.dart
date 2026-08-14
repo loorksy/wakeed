@@ -853,7 +853,7 @@ class _ProfitTabState extends State<ProfitTab> {
     if (app.tableProfit.isEmpty && data.text.isNotEmpty) data.clear();
     if (app.notesProfit.isEmpty && notes.text.isNotEmpty) notes.clear();
     app.ensureProfitEntries();
-    final rows = app.profitRows().where((r) => !r.balancing).toList();
+    final rows = app.profitRows();
     final groups = profitLedgerGroups(rows);
     final t = app.totals(rows);
     final paste = app.currentProfitPaste();
@@ -869,10 +869,12 @@ class _ProfitTabState extends State<ProfitTab> {
             return '${keyIndex.putIfAbsent(key, () => ++voucherNo)}';
           }(),
           '${i + 1}',
-          app.composeNote(
-            rows[i].description,
-            rows[i].clientNote.isNotEmpty ? rows[i].clientNote : app.sectionNote('profit'),
-          ),
+          rows[i].balancing
+              ? (rows[i].credit.isNotEmpty ? 'ربح' : 'كسر')
+              : app.composeNote(
+                  rows[i].description,
+                  rows[i].clientNote.isNotEmpty ? rows[i].clientNote : app.sectionNote('profit'),
+                ),
           () {
             final name = app.chartAccountName(rows[i].account);
             return name.isNotEmpty ? name : rows[i].account;
