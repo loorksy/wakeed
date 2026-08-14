@@ -3,6 +3,7 @@ server/data/
 .env
 *.db
 releases/*.apk
+!releases/wakeed-app.apk
 mobile/android/
 mobile/node_modules/
 .DS_Store
