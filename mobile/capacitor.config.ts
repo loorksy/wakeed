@@ -5,9 +5,8 @@ const config: CapacitorConfig = {
   appName: "وكيد — سند حوالة",
   webDir: "../client",
   server: {
-    // Set your production URL before building release APK:
-    // url: "https://YOUR_DOMAIN",
-    // cleartext: false,
+    url: "https://wakeed.lork.cloud",
+    cleartext: false,
     androidScheme: "https",
   },
   android: {

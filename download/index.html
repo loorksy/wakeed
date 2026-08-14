@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b0f14">
   <title>تحميل تطبيق وكيد</title>
-  <link rel="stylesheet" href="/styles.css?v=dl1">
+  <link rel="stylesheet" href="/styles.css?v=dl2">
   <style>
     body { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg, #0b0f14); color: var(--text, #e2e8f0); }
     .download-card { max-width: 420px; width: 100%; text-align: center; }
@@ -13,11 +13,15 @@
     .download-card h1 { margin: 0 0 8px; font-size: 1.5rem; }
     .download-sub { color: var(--muted, #94a3b8); margin-bottom: 24px; line-height: 1.6; font-size: 14px; }
     .download-btn { display: inline-block; padding: 14px 28px; font-size: 16px; border-radius: 10px; text-decoration: none; margin-bottom: 16px; }
+    .download-btn.disabled { opacity: 0.5; pointer-events: none; }
     .steps { text-align: right; font-size: 13px; color: var(--muted, #94a3b8); margin-top: 24px; line-height: 1.8; }
     .steps ol { padding-right: 20px; margin: 0; }
     #qrBox { margin: 16px auto; padding: 12px; background: #fff; border-radius: 8px; display: inline-block; }
     #qrBox img { display: block; width: 160px; height: 160px; }
     .version { font-size: 12px; color: var(--muted, #64748b); margin-top: 8px; }
+    #apkStatus { font-size: 13px; margin-top: 10px; min-height: 1.2em; }
+    #apkStatus.error { color: #f87171; }
+    #apkStatus.ok { color: #34d399; }
   </style>
 </head>
 <body>
@@ -28,7 +32,8 @@
       تطبيق أندرويد لتسجيل سندات الحوالة في وكيد.<br>
       يتطلب مفتاح ترخيص واتصالاً دائماً بالسيرفر.
     </p>
-    <a id="apkLink" class="primary download-btn" href="/releases/wakeed-app.apk" download>تنزيل APK</a>
+    <a id="apkLink" class="primary download-btn disabled" href="/releases/wakeed-app.apk" download="wakeed-app.apk">تنزيل APK</a>
+    <div id="apkStatus">جارٍ التحقق من توفر الملف...</div>
     <div id="qrBox" hidden>
       <img id="qrImg" alt="QR code" width="160" height="160">
     </div>
@@ -36,7 +41,8 @@
     <div class="steps">
       <strong>خطوات التثبيت:</strong>
       <ol>
-        <li>حمّل ملف APK وثبّته (فعّل «مصادر غير معروفة» إن طُلب).</li>
+        <li>حمّل ملف <strong>wakeed-app.apk</strong> (وليس أي ملف آخر).</li>
+        <li>ثبّته (فعّل «مصادر غير معروفة» إن طُلب).</li>
         <li>افتح التطبيق وأدخل مفتاح الترخيص.</li>
         <li>سجّل الدخول بحساب وكيد وابدأ العمل.</li>
       </ol>
@@ -47,15 +53,30 @@
     (function () {
       var apkUrl = location.origin + "/releases/wakeed-app.apk";
       var link = document.getElementById("apkLink");
+      var status = document.getElementById("apkStatus");
       if (link) link.href = apkUrl;
-      var qr = "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(apkUrl);
-      var box = document.getElementById("qrBox");
-      var img = document.getElementById("qrImg");
-      if (img && box) {
-        img.src = qr;
-        img.onload = function () { box.hidden = false; };
-        img.onerror = function () { box.hidden = true; };
-      }
+      fetch(apkUrl, { method: "HEAD" }).then(function (res) {
+        var type = String(res.headers.get("content-type") || "");
+        var ok = res.ok && (type.indexOf("android") >= 0 || type.indexOf("octet-stream") >= 0);
+        if (ok) {
+          link.classList.remove("disabled");
+          status.textContent = "الملف جاهز للتنزيل.";
+          status.className = "ok";
+          var qr = "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(apkUrl);
+          var box = document.getElementById("qrBox");
+          var img = document.getElementById("qrImg");
+          if (img && box) {
+            img.src = qr;
+            img.onload = function () { box.hidden = false; };
+          }
+        } else {
+          status.textContent = "ملف APK غير متوفر بعد. استخدم نسخة الويب مؤقتاً أو تواصل مع الأدمن.";
+          status.className = "error";
+        }
+      }).catch(function () {
+        status.textContent = "تعذر التحقق من الملف. جرّب لاحقاً أو استخدم نسخة الويب.";
+        status.className = "error";
+      });
     })();
   </script>
 </body>
