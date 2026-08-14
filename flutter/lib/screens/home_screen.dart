@@ -532,6 +532,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    final creditWho = app.chartAccountName(creditCtrl.text);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -572,7 +573,10 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
               Expanded(
                 child: TextField(
                   controller: creditCtrl,
-                  decoration: const InputDecoration(labelText: 'الدائن', hintText: '9830'),
+                  decoration: InputDecoration(
+                    labelText: creditWho.isNotEmpty ? creditWho : 'الدائن',
+                    hintText: '9830',
+                  ),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -742,6 +746,8 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    final debitWho = app.chartAccountName(debitCtrl.text);
+    final creditWho = app.chartAccountName(creditCtrl.text);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
@@ -780,7 +786,10 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               Expanded(
                 child: TextField(
                   controller: debitCtrl,
-                  decoration: const InputDecoration(labelText: 'المدين', hintText: 'رمز الحساب'),
+                  decoration: InputDecoration(
+                    labelText: debitWho.isNotEmpty ? debitWho : 'المدين',
+                    hintText: 'رمز الحساب',
+                  ),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -797,7 +806,10 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               Expanded(
                 child: TextField(
                   controller: creditCtrl,
-                  decoration: const InputDecoration(labelText: 'الدائن', hintText: 'رمز الحساب'),
+                  decoration: InputDecoration(
+                    labelText: creditWho.isNotEmpty ? creditWho : 'الدائن',
+                    hintText: 'رمز الحساب',
+                  ),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -872,7 +884,10 @@ class _ProfitTabState extends State<ProfitTab> {
             rows[i].description,
             rows[i].clientNote.isNotEmpty ? rows[i].clientNote : app.sectionNote('profit'),
           ),
-          rows[i].account,
+          () {
+            final name = app.chartAccountName(rows[i].account);
+            return name.isNotEmpty ? name : rows[i].account;
+          }(),
           rows[i].debit,
           rows[i].credit,
           app.resolvedLabel(app.resolvedProfit, rows[i].account),
@@ -1089,9 +1104,9 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final c = num.tryParse(cleanAmount(creditAmtCtrl.text)) ?? 0;
     final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
     final profit = d - c;
-    final debitResolved = app.resolvedLabel(app.resolvedProfit, debitCtrl.text);
-    final debitWho = debitResolved == 'لم يُحل بعد' ? debitCtrl.text.trim() : debitResolved;
-    final forText = profitForLabel(profit, debitWho);
+    final debitWho = app.chartAccountName(debitCtrl.text);
+    final creditWho = app.chartAccountName(creditCtrl.text);
+    final forText = debitWho;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
@@ -1150,7 +1165,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 flex: 3,
                 child: TextField(
                   controller: creditCtrl,
-                  decoration: _dense.copyWith(labelText: 'الدائن'),
+                  decoration: _dense.copyWith(labelText: creditWho.isNotEmpty ? creditWho : 'الدائن'),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -1165,7 +1180,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: TextField(
                   controller: creditAmtCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: _dense.copyWith(labelText: 'مبلغ الدائن'),
+                  decoration: _dense.copyWith(labelText: creditWho.isNotEmpty ? 'مبلغ $creditWho' : 'مبلغ الدائن'),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -1178,7 +1193,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 flex: 3,
                 child: TextField(
                   controller: debitCtrl,
-                  decoration: _dense.copyWith(labelText: 'المدين'),
+                  decoration: _dense.copyWith(labelText: debitWho.isNotEmpty ? debitWho : 'المدين'),
                   onChanged: (_) => _sync(),
                 ),
               ),
@@ -1193,7 +1208,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: TextField(
                   controller: debitAmtCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: _dense.copyWith(labelText: 'مبلغ المدين'),
+                  decoration: _dense.copyWith(labelText: debitWho.isNotEmpty ? 'مبلغ $debitWho' : 'مبلغ المدين'),
                   onChanged: (_) => _sync(),
                 ),
               ),

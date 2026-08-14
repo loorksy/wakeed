@@ -399,7 +399,7 @@ String formatProfitSigned(num diff) {
 }
 
 String profitKindLabel(num diff) {
-  if (diff > 0.001) return 'ربح للمدين';
+  if (diff > 0.001) return 'ربح';
   if (diff < -0.001) return 'كسر';
   return 'فرق';
 }

@@ -119,7 +119,7 @@ void main() {
       expect(profitPasteTotals([
         ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
       ])['diff'], 100);
-      expect(profitKindLabel(100), 'ربح للمدين');
+      expect(profitKindLabel(100), 'ربح');
       expect(profitForLabel(100, 'احمد'), 'لصالح احمد');
     });
 

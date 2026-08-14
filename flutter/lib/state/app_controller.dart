@@ -721,6 +721,30 @@ class AppController extends ChangeNotifier {
     return 'يُحمَّل الدليل بعد الدخول';
   }
 
+  String chartAccountName(String code) {
+    final key = normalizeAccountKey(code);
+    if (key.isEmpty) return '';
+    dynamic acc = accountCache[key];
+    if (acc == null) {
+      for (final a in accounts) {
+        if (pickAccountCode(a) == key) {
+          acc = a;
+          break;
+        }
+      }
+    }
+    acc ??= resolvedProfit?[key] ??
+        resolvedCharge?[key] ??
+        resolvedManual?[key] ??
+        resolvedEach?[key] ??
+        resolvedBatch?[key];
+    if (acc != null) {
+      final name = accountNameOf(acc);
+      if (name.isNotEmpty) return name;
+    }
+    return '';
+  }
+
   String debitDefaultHint() {
     final owner = currentOwnerKey();
     final code = owner.isNotEmpty ? debitDefaults[owner] : null;
@@ -1873,9 +1897,7 @@ class AppController extends ChangeNotifier {
   }
 
   String profitPartyLabel(ProfitPasteRow row) {
-    final resolved = resolvedLabel(resolvedProfit, row.debit);
-    if (resolved.isNotEmpty && resolved != 'لم يُحل بعد') return resolved;
-    return row.debit.trim();
+    return chartAccountName(row.debit);
   }
 
   String profitPartiesLabel(List<ProfitPasteRow> paste) {
