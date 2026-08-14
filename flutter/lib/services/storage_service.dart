@@ -35,6 +35,22 @@ class StorageService {
     await _prefs.setString(prefsLastDialog, jsonEncode(data));
   }
 
+  Future<void> saveLedgerCache(List<Map<String, dynamic>> rows) async {
+    await _prefs.setString(prefsLedgerCache, jsonEncode(rows));
+  }
+
+  List<Map<String, dynamic>> loadLedgerCache() {
+    final raw = _prefs.getString(prefsLedgerCache);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   Map<String, dynamic>? loadLastDialog() {
     final raw = _prefs.getString(prefsLastDialog);
     if (raw == null || raw.isEmpty) return null;

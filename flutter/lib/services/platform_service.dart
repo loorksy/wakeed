@@ -29,6 +29,8 @@ class PlatformService {
   List<dynamic> subscriptions = [];
   bool blocked = false;
   String blockMessage = '';
+  String lastAuthMessage = '';
+  String lastAuthCode = '';
 
   BlockCallback? onBlock;
   Timer? _heartbeatTimer;
@@ -186,13 +188,19 @@ class PlatformService {
           .timeout(const Duration(seconds: 15));
       final json = await _decode(res);
       if (res.statusCode < 200 || res.statusCode >= 300 || json['ok'] == false) {
+        lastAuthMessage = (json['message'] ?? 'الترخيص غير صالح.').toString();
+        lastAuthCode = (json['code'] ?? '').toString();
         if (blockOnFailure) {
-          blockApp((json['message'] ?? 'الترخيص غير صالح.').toString(), (json['code'] ?? '').toString());
+          blockApp(lastAuthMessage, lastAuthCode);
         }
         return false;
       }
+      lastAuthMessage = '';
+      lastAuthCode = '';
       return true;
     } catch (_) {
+      lastAuthMessage = 'لا يوجد اتصال بالسيرفر. التطبيق متوقف حتى عودة الاتصال.';
+      lastAuthCode = 'offline';
       if (paused && !blockOnFailure) return false;
       if (blockOnFailure) {
         blockApp('لا يوجد اتصال بالسيرفر. التطبيق متوقف حتى عودة الاتصال.', 'offline');
@@ -215,13 +223,39 @@ class PlatformService {
     _heartbeatTimer = null;
   }
 
+  Future<bool> restoreLicenseSession() async {
+    final key = licenseKey.isNotEmpty ? licenseKey : storage.licenseKey;
+    if (key.isEmpty) return false;
+    try {
+      await activateLicense(key);
+      return true;
+    } on PlatformApiException catch (err) {
+      lastAuthMessage = err.message;
+      lastAuthCode = err.code ?? '';
+      if (err.isAuth || (err.status != null && err.status! >= 400 && err.status! < 500)) {
+        blockApp(err.message, err.code ?? 'invalid');
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> initPlatform() async {
     getDeviceId();
     sessionToken = storage.sessionToken;
     licenseKey = storage.licenseKey;
-    if (sessionToken.isEmpty) return false;
-    final ok = await heartbeat(blockOnFailure: true);
-    if (!ok) return false;
+    if (sessionToken.isEmpty && licenseKey.isEmpty) return false;
+    var ok = sessionToken.isNotEmpty ? await heartbeat(blockOnFailure: false) : false;
+    if (!ok && licenseKey.isNotEmpty) {
+      ok = await restoreLicenseSession();
+    }
+    if (!ok) {
+      if (lastAuthMessage.isNotEmpty) {
+        blockApp(lastAuthMessage, lastAuthCode);
+      }
+      return false;
+    }
     startHeartbeat();
     return true;
   }

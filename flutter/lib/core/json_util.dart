@@ -97,7 +97,16 @@ List<dynamic> asList(dynamic data) {
   if (data == null) return [];
   if (data is List) return data;
   if (data is Map) {
-    for (final key in ['Items', 'items', 'Data', 'data', 'Result', 'result']) {
+    for (final key in [
+      'JournalEntryData',
+      'journalEntryData',
+      'Items',
+      'items',
+      'Data',
+      'data',
+      'Result',
+      'result',
+    ]) {
       final v = data[key];
       if (v is List) return v;
     }
@@ -151,6 +160,8 @@ String pickUserDisplayName(dynamic user) {
     combined,
     user['displayName'],
     user['DisplayName'],
+    user['userName'],
+    user['UserName'],
     user['email'],
     user['username'],
   ]) {

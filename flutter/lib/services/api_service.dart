@@ -25,15 +25,7 @@ class ApiService {
       platform.subscriptions = wakeed['subscriptions'] is List ? wakeed['subscriptions'] as List : [];
       platform.wakeedToken = wakeed['hasToken'] == true ? 'server-held' : '';
     }
-    final ledgerJson = await platform.platformFetch('/api/ledger');
-    final ledgerData =
-        ledgerJson['data'] is Map ? Map<String, dynamic>.from(ledgerJson['data'] as Map) : ledgerJson;
-    final rows = (ledgerData['rows'] is List) ? ledgerData['rows'] as List : [];
-    final ledger = rows
-        .whereType<Map>()
-        .map((row) => LedgerEntry.fromJson(Map<String, dynamic>.from(row)))
-        .toList();
-    return {'settings': settings, 'theme': theme, 'ledger': ledger};
+    return {'settings': settings, 'theme': theme, 'ledger': <LedgerEntry>[]};
   }
 
   String defaultOr(String v) => v.isEmpty ? 'server1.wakeed.app' : v;
@@ -60,19 +52,7 @@ class ApiService {
   }
 
   Future<void> syncAppendLedger(List<LedgerEntry> entries) async {
-    await platform.platformFetch(
-      '/api/ledger',
-      method: 'POST',
-      body: {'entries': entries.map((e) => e.toJson()).toList()},
-    );
-  }
-
-  Future<List<LedgerEntry>> syncGetLedger([String ownerKey = '']) async {
-    final q = ownerKey.isNotEmpty ? '?ownerKey=${Uri.encodeComponent(ownerKey)}' : '';
-    final json = await platform.platformFetch('/api/ledger$q');
-    final data = json['data'] is Map ? Map<String, dynamic>.from(json['data'] as Map) : json;
-    final rows = (data['rows'] is List) ? data['rows'] as List : [];
-    return rows.whereType<Map>().map((row) => LedgerEntry.fromJson(Map<String, dynamic>.from(row))).toList();
+    // Ledger lives in Wakeed + on-device cache only — not the platform DB.
   }
 
   Future<Map<String, dynamic>> wakeedLogin(

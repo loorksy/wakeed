@@ -10,6 +10,7 @@ class BlockScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    final message = app.platform.blockMessage.isEmpty ? 'التطبيق متوقف.' : app.platform.blockMessage;
     return Scaffold(
       backgroundColor: const Color(0xFF1A0A0A),
       body: Center(
@@ -33,7 +34,7 @@ class BlockScreen extends StatelessWidget {
                     const Text('التطبيق متوقف', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     Text(
-                      app.platform.blockMessage.isEmpty ? 'التطبيق متوقف.' : app.platform.blockMessage,
+                      message,
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: WakeedColors.err),
                     ),
@@ -45,6 +46,14 @@ class BlockScreen extends StatelessWidget {
                         child: app.busy
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Text('إعادة المحاولة'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: app.busy ? null : app.enterNewLicense,
+                        child: const Text('إدخال ترخيص جديد'),
                       ),
                     ),
                   ],

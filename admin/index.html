@@ -3,37 +3,118 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0f14">
   <title>لوحة الأدمن — وكيد</title>
-  <link rel="stylesheet" href="/styles.css?v=admin1">
   <style>
-    body { min-height: 100dvh; background: var(--bg, #0b0f14); color: var(--text, #e2e8f0); }
-    .admin-wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+    :root {
+      --bg: #0b0f14;
+      --surface: #151c26;
+      --surface-2: #1a2330;
+      --border: #263244;
+      --text: #e8edf4;
+      --muted: #8b9cb3;
+      --accent: #14b8a6;
+      --accent-strong: #0f766e;
+      --green: #4ade80;
+      --err: #f87171;
+      --warn: #fbbf24;
+      --radius: 10px;
+      --font: Tahoma, "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    button, input, select { font: inherit; color: inherit; }
+    .admin-wrap { max-width: 960px; margin: 0 auto; padding: 20px 16px 48px; }
     .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-    .admin-head h1 { margin: 0; font-size: 1.35rem; }
-    .admin-card { background: var(--card, #111827); border: 1px solid var(--border, #1f2937); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .mark {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: rgba(20,184,166,.16);
+      border: 1px solid rgba(20,184,166,.45);
+      color: var(--accent); font-weight: 800; font-size: 18px;
+    }
+    .admin-head h1 { margin: 0; font-size: 16px; font-weight: 800; }
+    .admin-head .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .admin-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    h2 { margin: 0 0 14px; font-size: 15px; font-weight: 800; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 6px; }
+    input[type="email"], input[type="password"], input[type="text"] {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    button {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    button.primary, button#adminLoginBtn, button#createLicenseBtn {
+      background: var(--accent);
+      color: #042f2e;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    button.danger { color: var(--err); border-color: #7f1d1d; }
+    a.app-link {
+      text-decoration: none;
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+    }
     .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .admin-table th, .admin-table td { padding: 10px 8px; border-bottom: 1px solid var(--border, #1f2937); text-align: right; vertical-align: top; }
-    .admin-table th { color: var(--muted, #94a3b8); font-weight: 600; }
+    .admin-table th, .admin-table td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: top; }
+    .admin-table th { color: var(--muted); font-weight: 600; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
     .badge-active { background: #064e3b; color: #6ee7b7; }
     .badge-suspended { background: #78350f; color: #fcd34d; }
     .badge-deleted { background: #450a0a; color: #fca5a5; }
     .row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-    .row-actions button { font-size: 12px; padding: 4px 10px; }
-    .muted { color: var(--muted, #94a3b8); font-size: 12px; }
+    .row-actions button { font-size: 12px; padding: 6px 10px; }
+    .muted { color: var(--muted); font-size: 12px; }
     .license-key { font-family: ui-monospace, monospace; letter-spacing: 0.04em; }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
     .toolbar input { flex: 1; min-width: 180px; }
     #adminStatus { min-height: 1.2em; margin-top: 8px; font-size: 13px; }
-    .error { color: #f87171; }
-    .ok { color: #34d399; }
+    .error { color: var(--err); }
+    .ok { color: var(--green); }
+    .actions { margin-top: 12px; }
   </style>
 </head>
 <body>
   <div class="admin-wrap">
     <div class="admin-head">
-      <h1>لوحة الأدمن — تراخيص وكيد</h1>
-      <a href="/" class="secondary" style="text-decoration:none;padding:8px 12px;border-radius:8px;border:1px solid var(--border,#1f2937);">← التطبيق</a>
+      <div class="brand">
+        <div class="mark">و</div>
+        <div>
+          <h1>لوحة الأدمن — تراخيص وكيد</h1>
+          <div class="sub">نفس تصميم تطبيق وكيد</div>
+        </div>
+      </div>
+      <a href="/" class="app-link">التطبيق ←</a>
     </div>
 
     <section id="loginPanel" class="admin-card">

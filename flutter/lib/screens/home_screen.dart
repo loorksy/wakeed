@@ -20,7 +20,8 @@ class HomeScreen extends StatelessWidget {
     final index = switch (app.createTab) {
       'each' => 1,
       'manual' => 2,
-      'ledger' => 3,
+      'charge' => 3,
+      'ledger' => 4,
       _ => 0,
     };
     return Scaffold(
@@ -86,7 +87,7 @@ class HomeScreen extends StatelessWidget {
           TextButton(onPressed: app.logout, child: const Text('خروج')),
         ],
       ),
-      body: index == 3
+      body: index == 4
           ? const LedgerTab()
           : ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
@@ -96,17 +97,19 @@ class HomeScreen extends StatelessWidget {
                 if (index == 0) const BatchTab(),
                 if (index == 1) const EachTab(),
                 if (index == 2) const ManualTab(),
+                if (index == 3) const ChargeTab(),
               ],
             ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) {
-          app.setTab(['batch', 'each', 'manual', 'ledger'][i]);
+          app.setTab(['batch', 'each', 'manual', 'charge', 'ledger'][i]);
         },
         destinations: [
           const NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'جماعي'),
           const NavigationDestination(icon: Icon(Icons.person_outline), label: 'لكل عميل'),
           const NavigationDestination(icon: Icon(Icons.edit_note), label: 'فردي'),
+          const NavigationDestination(icon: Icon(Icons.local_shipping_outlined), label: 'شحن'),
           NavigationDestination(
             icon: Badge(
               label: Text('${app.ownerLedger().length}'),
@@ -570,6 +573,231 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   }
 }
 
+class ChargeTab extends StatelessWidget {
+  const ChargeTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    app.ensureChargeEntries();
+    final rows = app.chargeRows();
+    final groups = groupCustomerRows(rows);
+    final t = app.totals(rows);
+    final tableRows = <List<String>>[];
+    var lineNo = 0;
+    for (var gi = 0; gi < groups.length; gi++) {
+      for (final row in groups[gi].rows) {
+        lineNo += 1;
+        tableRows.add([
+          '${gi + 1}',
+          '$lineNo',
+          app.composeNote(row.description, row.clientNote),
+          row.account,
+          row.debit,
+          row.credit,
+          app.resolvedLabel(app.resolvedCharge, row.account),
+        ]);
+      }
+    }
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('شحن — سند لكل عملية', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              ),
+              Text('${app.chargeEntries.length}', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'اختر المدين والدائن لكل سند. لا يستخدم الحساب الافتراضي.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          for (var i = 0; i < app.chargeEntries.length; i++)
+            _ChargeEntryCard(key: ValueKey(app.chargeEntries[i].id), index: i, entry: app.chargeEntries[i]),
+          OutlinedButton(onPressed: app.addChargeEntry, child: const Text('+ سند')),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: app.busy ? null : app.previewCharge,
+                  child: const Text('معاينة'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: app.submitJob.active ? null : app.submitCharge,
+                  child: const Text('تسجيل'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              StatChip(label: 'سندات', value: '${groups.length}'),
+              const SizedBox(width: 6),
+              StatChip(label: 'مدين', value: '${t['debit']}', color: WakeedColors.pink),
+              const SizedBox(width: 6),
+              StatChip(label: 'دائن', value: '${t['credit']}', color: WakeedColors.green),
+            ],
+          ),
+          const SizedBox(height: 8),
+          PreviewTable(
+            columns: const ['سند', '#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
+            rows: tableRows,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChargeEntryCard extends StatefulWidget {
+  const _ChargeEntryCard({super.key, required this.index, required this.entry});
+
+  final int index;
+  final ManualEntry entry;
+
+  @override
+  State<_ChargeEntryCard> createState() => _ChargeEntryCardState();
+}
+
+class _ChargeEntryCardState extends State<_ChargeEntryCard> {
+  late final TextEditingController nameCtrl;
+  late final TextEditingController amountCtrl;
+  late final TextEditingController debitCtrl;
+  late final TextEditingController creditCtrl;
+  late final TextEditingController noteCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    nameCtrl = TextEditingController(text: widget.entry.name);
+    amountCtrl = TextEditingController(text: widget.entry.amount);
+    debitCtrl = TextEditingController(text: widget.entry.debit);
+    creditCtrl = TextEditingController(text: widget.entry.credit);
+    noteCtrl = TextEditingController(text: widget.entry.note);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChargeEntryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (debitCtrl.text != widget.entry.debit) debitCtrl.text = widget.entry.debit;
+    if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
+    if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
+    if (amountCtrl.text != widget.entry.amount && widget.entry.amount.isEmpty) amountCtrl.clear();
+    if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    amountCtrl.dispose();
+    debitCtrl.dispose();
+    creditCtrl.dispose();
+    noteCtrl.dispose();
+    super.dispose();
+  }
+
+  void _sync() {
+    final app = context.read<AppController>();
+    widget.entry
+      ..name = nameCtrl.text
+      ..amount = amountCtrl.text
+      ..debit = debitCtrl.text
+      ..credit = creditCtrl.text
+      ..note = noteCtrl.text;
+    app.updateChargeEntry(widget.entry);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              const Spacer(),
+              TextButton(
+                onPressed: app.chargeEntries.length > 1 ? () => app.removeChargeEntry(widget.entry.id) : null,
+                child: const Text('حذف'),
+              ),
+            ],
+          ),
+          TextField(
+            controller: nameCtrl,
+            decoration: const InputDecoration(labelText: 'الاسم', hintText: 'اسم العميل'),
+            onChanged: (_) => _sync(),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: amountCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'المبلغ', hintText: '1500'),
+            onChanged: (_) => _sync(),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: debitCtrl,
+                  decoration: const InputDecoration(labelText: 'المدين', hintText: 'رمز الحساب'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+              IconButton(
+                tooltip: 'اختر المدين',
+                onPressed: () => showAccountPicker(context, target: AccountPickTarget.chargeDebit(widget.entry.id)),
+                icon: const Icon(Icons.account_tree_outlined),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: creditCtrl,
+                  decoration: const InputDecoration(labelText: 'الدائن', hintText: 'رمز الحساب'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+              IconButton(
+                tooltip: 'اختر الدائن',
+                onPressed: () => showAccountPicker(context, target: AccountPickTarget.chargeCredit(widget.entry.id)),
+                icon: const Icon(Icons.account_tree_outlined),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: noteCtrl,
+            decoration: const InputDecoration(labelText: 'البيان', hintText: 'ملاحظة هذا السند'),
+            onChanged: (_) => _sync(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class LedgerTab extends StatelessWidget {
   const LedgerTab({super.key});
 
@@ -619,45 +847,24 @@ class LedgerTab extends StatelessWidget {
                 items: const [
                   DropdownMenuItem(value: '', child: Text('الكل')),
                   DropdownMenuItem(value: 'batch', child: Text('جماعي')),
-                  DropdownMenuItem(value: 'each', child: Text('فردي')),
+                  DropdownMenuItem(value: 'each', child: Text('لكل عميل')),
+                  DropdownMenuItem(value: 'charge', child: Text('شحن')),
+                  DropdownMenuItem(value: 'synced', child: Text('متزامن')),
                 ],
                 onChanged: (v) => app.setLedgerKindFilter(v ?? ''),
               ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: [
                   FilledButton(
-                    onPressed: () async {
-                      final list = app.filteredLedger();
-                      if (list.isEmpty) {
-                        app.showSubmitError('لا توجد بيانات', 'لا توجد صفوف في الفلترة الحالية للتنزيل.');
-                        return;
-                      }
-                      await Clipboard.setData(ClipboardData(text: app.ledgerTsv(list)));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('تم نسخ ${list.length} صفاً. الصق في جدول.')),
-                        );
-                      }
-                    },
-                    child: const Text('Sheets'),
+                    onPressed: app.downloadLedgerExcel,
+                    child: const Text('تنزيل Excel'),
                   ),
                   OutlinedButton(
-                    onPressed: () async {
-                      final list = app.filteredLedger();
-                      if (list.isEmpty) {
-                        app.showSubmitError('لا توجد بيانات', 'لا توجد صفوف في الفلترة الحالية للتنزيل.');
-                        return;
-                      }
-                      await Clipboard.setData(ClipboardData(text: app.ledgerTsv(list)));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('تم نسخ ${list.length} صفاً (TSV).')),
-                        );
-                      }
-                    },
-                    child: const Text('تنزيل'),
+                    onPressed: app.ledgerSyncing ? null : app.syncWakeedJournals,
+                    child: Text(app.ledgerSyncing ? 'جارٍ المزامنة...' : 'مزامنة'),
                   ),
                   TextButton(onPressed: app.clearLedgerFilters, child: const Text('مسح')),
                 ],
@@ -675,7 +882,9 @@ class LedgerTab extends StatelessWidget {
               const SizedBox(height: 8),
               PreviewTable(
                 emptyText: app.ownerLedger().isEmpty
-                    ? 'لا يوجد سندات في السجل بعد. أنشئ سنداً ليظهر هنا برقم وكيد.'
+                    ? (app.ledgerSyncing
+                        ? 'جارٍ مزامنة سندات حسابك من وكيد...'
+                        : 'لا يوجد سندات في السجل بعد. أنشئ سنداً أو اضغط مزامنة.')
                     : 'لا نتائج لهذه الفلترة.',
                 columns: const ['رقم', 'تاريخ', 'وقت', 'الاسم', 'مبلغ', 'مدين', 'دائن', 'بيان', 'نوع'],
                 rows: [

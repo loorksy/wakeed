@@ -101,6 +101,8 @@ export function listLicenses() {
 export function setLicenseStatus(id, status) {
   const now = new Date().toISOString();
   dbApi.licenses().update((l) => l.id === id, { status, updated_at: now });
-  if (status === "deleted" || status === "suspended") deleteSessionsForLicense(id);
+  // Keep the device session on suspend so reactivation resumes without
+  // "invalid license". Only delete sessions when the license is removed.
+  if (status === "deleted") deleteSessionsForLicense(id);
   return dbApi.licenses().get((l) => l.id === id);
 }

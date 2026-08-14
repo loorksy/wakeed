@@ -7,10 +7,13 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/constants.dart';
 import '../core/exceptions.dart';
+import '../core/journal_sync.dart';
 import '../core/json_util.dart';
 import '../core/remittance_parser.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/excel_export.dart';
+import '../services/file_download.dart';
 import '../services/notification_service.dart';
 import '../services/platform_service.dart';
 
@@ -43,6 +46,9 @@ class AppController extends ChangeNotifier {
   String tableBatch = '';
   String tableEach = '';
   List<ManualEntry> manualEntries = [];
+  List<ManualEntry> chargeEntries = [];
+  String wakeedUserId = '';
+  bool ledgerSyncing = false;
 
   bool connected = false;
   String connBadge = 'غير متصل';
@@ -67,11 +73,12 @@ class AppController extends ChangeNotifier {
   Map<String, dynamic>? resolvedBatch;
   Map<String, dynamic>? resolvedEach;
   Map<String, dynamic>? resolvedManual;
+  Map<String, dynamic>? resolvedCharge;
 
   final SubmitJob submitJob = SubmitJob();
   AccountPickTarget accountPickTarget = AccountPickTarget.debit();
 
-  String createTab = 'batch'; // batch | each | manual | ledger
+  String createTab = 'batch'; // batch | each | manual | charge | ledger
 
   Timer? _saveTimer;
   StreamSubscription<List<ConnectivityResult>>? _connSub;
@@ -185,9 +192,15 @@ class AppController extends ChangeNotifier {
     }
     var ok = false;
     for (var i = 0; i < 3; i++) {
-      ok = await platform.heartbeat(blockOnFailure: i == 2);
+      ok = await platform.heartbeat(blockOnFailure: false);
       if (ok) break;
       await Future<void>.delayed(Duration(milliseconds: 600 * (i + 1)));
+    }
+    if (!ok) {
+      ok = await platform.restoreLicenseSession();
+    }
+    if (!ok) {
+      await platform.heartbeat(blockOnFailure: true);
     }
     if (!silent) busy = false;
     if (ok) {
@@ -201,8 +214,19 @@ class AppController extends ChangeNotifier {
         } else {
           phase = AppPhase.login;
         }
+      } else {
+        phase = AppPhase.license;
       }
     }
+    _emit();
+  }
+
+  Future<void> enterNewLicense() async {
+    await platform.logoutLicense();
+    platform.unblockApp();
+    phase = AppPhase.license;
+    licenseStatus = 'أدخل مفتاح الترخيص الجديد.';
+    busy = false;
     _emit();
   }
 
@@ -411,6 +435,7 @@ class AppController extends ChangeNotifier {
       'table': tableBatch,
       'tableEach': tableEach,
       'manualEntries': manualEntries.map((e) => e.toJson()).toList(),
+      'chargeEntries': chargeEntries.map((e) => e.toJson()).toList(),
       'userDisplayName': platform.userDisplayName,
       'subscriptions': platform.subscriptions,
     };
@@ -460,6 +485,12 @@ class AppController extends ChangeNotifier {
             .map((e) => ManualEntry.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       }
+      if (settings['chargeEntries'] is List && (settings['chargeEntries'] as List).isNotEmpty) {
+        chargeEntries = (settings['chargeEntries'] as List)
+            .whereType<Map>()
+            .map((e) => ManualEntry.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
       if (settings['table'] != null) tableBatch = settings['table'].toString();
       if (settings['tableEach'] != null) tableEach = settings['tableEach'].toString();
       if (platform.ownerKey.isNotEmpty && ownerKey.isEmpty) ownerKey = platform.ownerKey;
@@ -467,7 +498,10 @@ class AppController extends ChangeNotifier {
         fillSubscriptions(platform.subscriptions, settings['ownerKey']?.toString() ?? platform.ownerKey);
       }
       if (data['theme'] == 'light') themeMode = ThemeMode.light;
-      serverLedgerCache = (data['ledger'] is List) ? List<LedgerEntry>.from(data['ledger'] as List) : [];
+      final cached = platform.storage.loadLedgerCache();
+      if (cached.isNotEmpty) {
+        serverLedgerCache = cached.map(LedgerEntry.fromJson).toList();
+      }
     } catch (_) {}
   }
 
@@ -557,6 +591,7 @@ class AppController extends ChangeNotifier {
       loginError = false;
       phase = AppPhase.home;
       _emit();
+      unawaited(syncWakeedJournals());
       return true;
     } catch (err) {
       connected = false;
@@ -580,13 +615,22 @@ class AppController extends ChangeNotifier {
     if (platform.wakeedToken.isEmpty || credentialsOwnerKey().isEmpty) return;
     try {
       final results = await Future.wait([
-        _api('GET', '/user-api/my-profile').catchError((_) => null),
+        _api('GET', '/api/Users/profile').catchError((_) => null),
         _api('GET', '/user-api/my-subscriptions').catchError((_) => null),
       ]);
       final profile = results[0];
       final user = profile is Map ? (profile['data'] ?? profile['user'] ?? profile) : null;
-      final name = pickUserDisplayName(user);
-      if (name.isNotEmpty) platform.userDisplayName = name;
+      if (user is Map) {
+        final id = (user['id'] ?? user['Id'] ?? user['userId'] ?? user['UserId'] ?? '').toString();
+        if (id.isNotEmpty) wakeedUserId = id;
+        final name = pickUserDisplayName(user);
+        final userName = (user['userName'] ?? user['UserName'] ?? user['name'] ?? '').toString().trim();
+        if (name.isNotEmpty) {
+          platform.userDisplayName = name;
+        } else if (userName.isNotEmpty) {
+          platform.userDisplayName = userName;
+        }
+      }
       final subs = mapSubscriptions(asList(results[1]));
       if (subs.isNotEmpty) {
         subscriptions = subs;
@@ -816,7 +860,7 @@ class AppController extends ChangeNotifier {
   }
 
   String groupStatement(CustomerGroup group, String section) {
-    final extra = section == 'manual' ? groupClientNote(group) : sectionNote(section);
+    final extra = (section == 'manual' || section == 'charge') ? groupClientNote(group) : sectionNote(section);
     return composeNote(group.name, extra);
   }
 
@@ -825,6 +869,67 @@ class AppController extends ChangeNotifier {
     return extra.isNotEmpty
         ? 'ستظهر في البيان: اسم العميل — $extra'
         : 'بدون ملاحظة إضافية — سيظهر اسم العميل كبيان.';
+  }
+
+  void ensureChargeEntries() {
+    if (chargeEntries.isEmpty) {
+      chargeEntries = [ManualEntry(id: manualEntryId())];
+    }
+  }
+
+  void addChargeEntry() {
+    ensureChargeEntries();
+    chargeEntries.add(ManualEntry(id: manualEntryId()));
+    saveLocal();
+    _emit();
+  }
+
+  void removeChargeEntry(String id) {
+    if (chargeEntries.length <= 1) return;
+    chargeEntries = chargeEntries.where((e) => e.id != id).toList();
+    saveLocal();
+    _emit();
+  }
+
+  void updateChargeEntry(ManualEntry entry) {
+    final i = chargeEntries.indexWhere((e) => e.id == entry.id);
+    if (i >= 0) chargeEntries[i] = entry;
+    resolvedManual = null;
+    scheduleSaveLocal();
+    _emit();
+  }
+
+  List<JournalRow> chargeRows() {
+    final rows = <JournalRow>[];
+    for (final entry in chargeEntries) {
+      final name = entry.name.trim();
+      final debit = entry.debit.trim();
+      final credit = entry.credit.trim();
+      final amt = cleanAmount(entry.amount);
+      if (name.isEmpty || amt.isEmpty || debit.isEmpty || credit.isEmpty) continue;
+      final clientNote = entry.note.trim();
+      rows.add(JournalRow(
+        account: debit,
+        description: name,
+        debit: amt,
+        credit: '',
+        clientNote: clientNote,
+      ));
+      rows.add(JournalRow(
+        account: credit,
+        description: name,
+        debit: '',
+        credit: amt,
+        clientNote: clientNote,
+      ));
+    }
+    return rows;
+  }
+
+  void clearChargeForm() {
+    chargeEntries = [ManualEntry(id: manualEntryId())];
+    saveLocal();
+    _emit();
   }
 
   void ensureManualEntries() {
@@ -996,7 +1101,9 @@ class AppController extends ChangeNotifier {
     final note = extras['lineNote'] ??
         composeNote(
           row.description,
-          extras['section'] == 'manual' ? row.clientNote : sectionNote((extras['section'] ?? 'batch').toString()),
+          extras['section'] == 'manual' || extras['section'] == 'charge'
+              ? row.clientNote
+              : sectionNote((extras['section'] ?? 'batch').toString()),
         );
     final detail = <String, dynamic>{
       'normalAccountId': accountId,
@@ -1044,7 +1151,8 @@ class AppController extends ChangeNotifier {
       final correspondingId = useOpposite && opposite != null
           ? pickId(resolved[normalizeAccountKey(opposite.account)])
           : '';
-      final lineExtra = lineNote ?? (section == 'manual' ? row.clientNote : sectionNote(section));
+      final lineExtra = lineNote ??
+          ((section == 'manual' || section == 'charge') ? row.clientNote : sectionNote(section));
       details.add(buildDetail(row, resolved[normalizeAccountKey(row.account)], i, dateIso, {
         'costCenterId': ccId,
         'correspondingId': correspondingId,
@@ -1058,7 +1166,7 @@ class AppController extends ChangeNotifier {
       throw PlatformApiException('القيد غير متوازن: مدين ${t['debit']} ≠ دائن ${t['credit']}');
     }
 
-    final journalNotes = notes ?? (section == 'manual' ? '' : sectionNote(section));
+    final journalNotes = notes ?? ((section == 'manual' || section == 'charge') ? '' : sectionNote(section));
     final notesFinal = (journalNotes.isNotEmpty ? journalNotes : 'سند حوالة');
     final tType = currentJournalType();
     dynamic scopeId;
@@ -1235,9 +1343,13 @@ class AppController extends ChangeNotifier {
     }).toList();
     if (fresh.isEmpty) return [];
     serverLedgerCache = [...fresh, ...all];
-    api.syncAppendLedger(fresh).then((_) {}, onError: (_) {});
+    _persistLedger();
     _emit();
     return fresh;
+  }
+
+  void _persistLedger() {
+    platform.storage.saveLedgerCache(serverLedgerCache.map((e) => e.toJson()).toList());
   }
 
   List<LedgerEntry> ownerLedger() {
@@ -1272,7 +1384,20 @@ class AppController extends ChangeNotifier {
     return {'pending': pending, 'skipped': skipped};
   }
 
-  String ledgerKindLabel(String kind) => kind == 'each' ? 'لكل عميل' : 'جماعي';
+  String ledgerKindLabel(String kind) {
+    switch (kind) {
+      case 'each':
+        return 'لكل عميل';
+      case 'manual':
+        return 'فردي';
+      case 'charge':
+        return 'شحن';
+      case 'synced':
+        return 'متزامن';
+      default:
+        return 'جماعي';
+    }
+  }
 
   String formatLedgerWhen(String? iso) {
     if (iso == null || iso.isEmpty) return '';
@@ -1463,15 +1588,22 @@ class AppController extends ChangeNotifier {
   Future<PreparedJournal?> previewAndResolve(String kind, {bool forSubmit = false, String? source}) async {
     final isEach = kind == 'each';
     final isManual = source == 'manual';
-    final rows = isManual ? manualRows() : currentRows(isEach ? 'each' : 'batch');
-    final emptyMessage = isManual
-        ? 'أكمل الاسم والمبلغ والدائن لسند واحد على الأقل.'
-        : 'الصق بيانات صالحة: الاسم | المبلغ | الدائن.';
+    final isCharge = source == 'charge';
+    final rows = isCharge
+        ? chargeRows()
+        : isManual
+            ? manualRows()
+            : currentRows(isEach ? 'each' : 'batch');
+    final emptyMessage = isCharge
+        ? 'أكمل الاسم والمبلغ والمدين والدائن لسند واحد على الأقل.'
+        : isManual
+            ? 'أكمل الاسم والمبلغ والدائن لسند واحد على الأقل.'
+            : 'الصق بيانات صالحة: الاسم | المبلغ | الدائن.';
     if (rows.isEmpty) {
       showSubmitError('بيانات ناقصة', emptyMessage, '', forSubmit);
       return null;
     }
-    if (debitAccount.trim().isEmpty) {
+    if (!isCharge && debitAccount.trim().isEmpty) {
       showSubmitError('حساب المدين', 'اختر حساب المدين من دليل الحسابات.', '', forSubmit);
       return null;
     }
@@ -1483,14 +1615,16 @@ class AppController extends ChangeNotifier {
     _emit();
     try {
       final resolved = await resolveRows(rows);
-      if (isManual) {
+      if (isCharge) {
+        resolvedCharge = resolved;
+      } else if (isManual) {
         resolvedManual = resolved;
       } else if (isEach) {
         resolvedEach = resolved;
       } else {
         resolvedBatch = resolved;
       }
-      final section = isManual ? 'manual' : (isEach ? 'each' : 'batch');
+      final section = isCharge ? 'charge' : (isManual ? 'manual' : (isEach ? 'each' : 'batch'));
       _emit();
       return PreparedJournal(rows: rows, resolved: resolved, section: section, source: source ?? section);
     } catch (err) {
@@ -1505,6 +1639,7 @@ class AppController extends ChangeNotifier {
   Future<void> previewBatch() => previewAndResolve('batch');
   Future<void> previewEach() => previewAndResolve('each');
   Future<void> previewManual() => previewAndResolve('each', source: 'manual');
+  Future<void> previewCharge() => previewAndResolve('each', source: 'charge');
 
   Future<void> runJournalSubmit(
     String mode,
@@ -1562,6 +1697,14 @@ class AppController extends ChangeNotifier {
       'each',
       () => previewAndResolve('each', forSubmit: true, source: 'manual'),
       'يتم الآن تسجيل سند منفصل لكل عميل. يرجى الانتظار.',
+    );
+  }
+
+  Future<void> submitCharge() {
+    return runJournalSubmit(
+      'each',
+      () => previewAndResolve('each', forSubmit: true, source: 'charge'),
+      'يتم الآن تسجيل سندات الشحن في وكيد. يرجى الانتظار.',
     );
   }
 
@@ -1631,6 +1774,8 @@ class AppController extends ChangeNotifier {
       );
       if (section == 'manual') {
         clearManualForm();
+      } else if (section == 'charge') {
+        clearChargeForm();
       } else {
         clearEachForm();
       }
@@ -1650,11 +1795,11 @@ class AppController extends ChangeNotifier {
         final created = await enrichCreated(await postJournalWithRetry(body));
         final number = pickJournalNumber(created);
         appendLedgerEntries(
-          kind: 'each',
+          kind: section == 'charge' ? 'charge' : 'each',
           groups: [group],
           resolved: prepared.resolved,
           created: created,
-          extra: section == 'manual' ? groupClientNote(group) : sectionNote(section),
+          extra: (section == 'manual' || section == 'charge') ? groupClientNote(group) : sectionNote(section),
           date: date,
           section: section,
         );
@@ -1681,6 +1826,8 @@ class AppController extends ChangeNotifier {
       );
       if (section == 'manual') {
         clearManualForm();
+      } else if (section == 'charge') {
+        clearChargeForm();
       } else {
         clearEachForm();
       }
@@ -1695,6 +1842,116 @@ class AppController extends ChangeNotifier {
         lines.join('\n'),
         true,
       );
+    }
+  }
+
+  Future<void> syncWakeedJournals() async {
+    if (!connected || platform.wakeedToken.isEmpty) return;
+    ledgerSyncing = true;
+    _emit();
+    try {
+      if (wakeedUserId.isEmpty) {
+        await refreshSessionIdentity();
+      }
+      final codes = accountCodesById(accounts);
+      final remote = <LedgerEntry>[];
+      const limit = 50;
+      var offset = 0;
+      final now = DateTime.now();
+      final from = DateTime(now.year - 2, 1, 1);
+      String iso(DateTime d) =>
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}T00:00:00';
+      final fromS = iso(from);
+      final toS = iso(DateTime(now.year, 12, 31));
+      for (var page = 0; page < 40; page++) {
+        final params = <String, String>{
+          'fromDate': fromS,
+          'toDate': toS,
+          'offset': '$offset',
+          'limit': '$limit',
+          if (wakeedUserId.isNotEmpty) 'userId': wakeedUserId,
+        };
+        final qs = params.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
+        final data = await _api('GET', '/api/JournalEntry?$qs');
+        final pageItems = asList(data);
+        if (pageItems.isEmpty) break;
+        remote.addAll(
+          ledgerFromWakeedJournals(
+            data,
+            ownerKey: currentOwnerKey(),
+            userId: wakeedUserId,
+            userName: displayUserName,
+            accountCodesById: codes,
+          ),
+        );
+        if (pageItems.length < limit) break;
+        offset += limit;
+      }
+      final remoteKeys = remote
+          .map((r) => '${r.journalId}|${r.name}|${r.entryDate}')
+          .where((k) => !k.startsWith('|'))
+          .toSet();
+      final localOnly = serverLedgerCache.where((row) {
+        if (row.kind == 'synced') return false;
+        final key = '${row.journalId}|${row.name}|${row.entryDate}';
+        return !remoteKeys.contains(key);
+      }).toList();
+      serverLedgerCache = [...localOnly, ...remote];
+      _persistLedger();
+    } catch (_) {
+      // Keep the on-device cache if Wakeed listing fails.
+    } finally {
+      ledgerSyncing = false;
+      _emit();
+    }
+  }
+
+  Future<void> downloadLedgerExcel() async {
+    final list = filteredLedger();
+    if (list.isEmpty) {
+      showSubmitError('لا توجد بيانات', 'لا توجد صفوف في الفلترة الحالية للتنزيل.');
+      return;
+    }
+    try {
+      final bytes = buildExcelSheet(
+        sheetName: 'السجل',
+        headers: const [
+          'رقم السند',
+          'تاريخ السند',
+          'وقت الإنشاء',
+          'الاسم',
+          'المبلغ',
+          'المدين',
+          'اسم المدين',
+          'الدائن',
+          'اسم الدائن',
+          'البيان',
+          'الملاحظة',
+          'النوع',
+        ],
+        rows: [
+          for (final row in list)
+            [
+              row.journalNumber,
+              row.entryDate,
+              formatLedgerWhen(row.createdAt),
+              row.name,
+              row.amount,
+              row.debitAccount,
+              row.debitAccountName,
+              row.creditAccount,
+              row.creditAccountName,
+              row.statement,
+              row.notes,
+              ledgerKindLabel(row.kind),
+            ],
+        ],
+      );
+      final name = ledgerExcelFileName(list.map((r) => r.entryDate).toList());
+      await saveBytesAsFile(bytes: bytes, filename: name, mimeType: excelMime);
+      showSubmitSuccess('تم التنزيل', 'تم تنزيل ملف إكسل ($name) — ${list.length} صفاً.');
+    } catch (err) {
+      showSubmitError('تعذر التنزيل', err.toString());
     }
   }
 

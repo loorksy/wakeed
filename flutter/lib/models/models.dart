@@ -95,6 +95,7 @@ class ManualEntry {
     required this.id,
     this.name = '',
     this.amount = '',
+    this.debit = '',
     this.credit = '',
     this.note = '',
   });
@@ -102,6 +103,7 @@ class ManualEntry {
   String id;
   String name;
   String amount;
+  String debit;
   String credit;
   String note;
 
@@ -109,6 +111,7 @@ class ManualEntry {
         'id': id,
         'name': name,
         'amount': amount,
+        'debit': debit,
         'credit': credit,
         'note': note,
       };
@@ -118,6 +121,7 @@ class ManualEntry {
       id: (json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
       amount: (json['amount'] ?? '').toString(),
+      debit: (json['debit'] ?? '').toString(),
       credit: (json['credit'] ?? '').toString(),
       note: (json['note'] ?? '').toString(),
     );
@@ -153,6 +157,8 @@ class SubmitJob {
 class AccountPickTarget {
   AccountPickTarget.debit() : type = 'debit', entryId = null;
   AccountPickTarget.credit(this.entryId) : type = 'credit';
+  AccountPickTarget.chargeDebit(this.entryId) : type = 'chargeDebit';
+  AccountPickTarget.chargeCredit(this.entryId) : type = 'chargeCredit';
 
   final String type;
   final String? entryId;

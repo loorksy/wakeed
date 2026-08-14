@@ -29,7 +29,11 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
-    final title = app.accountPickTarget.type == 'debit' ? 'دليل الحسابات — المدين' : 'دليل الحسابات — الدائن';
+    final title = switch (app.accountPickTarget.type) {
+      'debit' => 'دليل الحسابات — المدين',
+      'chargeDebit' => 'دليل الحسابات — المدين',
+      _ => 'دليل الحسابات — الدائن',
+    };
     final list = app.filteredAccounts(query);
     final shown = list.take(120).toList();
     return SafeArea(
@@ -98,10 +102,20 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
 
   void _pick(AppController app, String code) {
     final target = app.accountPickTarget;
-    if (target.type == 'credit' && target.entryId != null) {
-      final entry = app.manualEntries.firstWhere((e) => e.id == target.entryId);
-      entry.credit = code;
-      app.updateManualEntry(entry);
+    if (target.entryId != null) {
+      if (target.type == 'credit') {
+        final entry = app.manualEntries.firstWhere((e) => e.id == target.entryId);
+        entry.credit = code;
+        app.updateManualEntry(entry);
+      } else if (target.type == 'chargeCredit' || target.type == 'chargeDebit') {
+        final entry = app.chargeEntries.firstWhere((e) => e.id == target.entryId);
+        if (target.type == 'chargeCredit') {
+          entry.credit = code;
+        } else {
+          entry.debit = code;
+        }
+        app.updateChargeEntry(entry);
+      }
     } else {
       app.selectDebitAccount(code);
     }

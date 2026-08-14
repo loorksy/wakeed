@@ -11,3 +11,6 @@ const String prefsSessionToken = 'wakeed.sessionToken';
 const String prefsDeviceId = 'wakeed.deviceId';
 const String prefsLicenseKey = 'wakeed.licenseKey';
 const String prefsLastDialog = 'wakeed.lastDialog';
+const String prefsLedgerCache = 'wakeed.ledgerCache';
+const String excelMime =
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

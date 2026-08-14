@@ -19,6 +19,7 @@ class SettingsCard extends StatelessWidget {
         children: [
           const Text('الإعدادات', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
+          if (app.createTab != 'charge') ...[
           const Text('حساب المدين', style: TextStyle(fontSize: 12)),
           const SizedBox(height: 4),
           OutlinedButton(
@@ -42,6 +43,7 @@ class SettingsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          ],
           Row(
             children: [
               Expanded(
