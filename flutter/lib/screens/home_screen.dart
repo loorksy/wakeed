@@ -96,7 +96,7 @@ class HomeScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               children: [
                 const SettingsCard(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 if (index == 0) const BatchTab(),
                 if (index == 1) const EachTab(),
                 if (index == 2) const ManualTab(),
@@ -854,16 +854,14 @@ class _ProfitTabState extends State<ProfitTab> {
     final t = app.totals(rows);
     final paste = app.currentProfitPaste();
     final pt = profitPasteTotals(paste);
-    final diff = pt['diff'] ?? 0;
+    final profit = pt['diff'] ?? 0;
     final keyIndex = <String, int>{};
     var voucherNo = 0;
     final tableRows = <List<String>>[
       for (var i = 0; i < rows.length; i++)
         [
           () {
-            final row = rows[i];
-            if (row.balancing && row.groupKey == 'profit-balance') return 'فرق';
-            final key = row.groupKey.isEmpty ? 'r$i' : row.groupKey;
+            final key = rows[i].groupKey.isEmpty ? 'r$i' : rows[i].groupKey;
             return '${keyIndex.putIfAbsent(key, () => ++voucherNo)}';
           }(),
           '${i + 1}',
@@ -993,9 +991,13 @@ class _ProfitTabState extends State<ProfitTab> {
               StatChip(label: 'دائن', value: '${pt['credit'] ?? t['credit']}', color: WakeedColors.green),
               const SizedBox(width: 6),
               StatChip(
-                label: 'فرق',
-                value: formatProfitAmount(diff.abs()),
-                color: diff.abs() > 0.001 ? WakeedColors.warn : WakeedColors.accent,
+                label: profitKindLabel(profit),
+                value: formatProfitSigned(profit),
+                color: profit > 0.001
+                    ? WakeedColors.green
+                    : profit < -0.001
+                        ? WakeedColors.err
+                        : WakeedColors.accent,
               ),
             ],
           ),
@@ -1083,7 +1085,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final app = context.watch<AppController>();
     final c = num.tryParse(cleanAmount(creditAmtCtrl.text)) ?? 0;
     final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
-    final diff = c - d;
+    final profit = d - c;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
@@ -1099,10 +1101,15 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               const SizedBox(width: 8),
               if (c > 0 || d > 0)
                 Text(
-                  'فرق ${formatProfitAmount(diff.abs())}',
+                  '${profitKindLabel(profit)} ${formatProfitSigned(profit)}',
                   style: TextStyle(
-                    fontSize: 11,
-                    color: diff.abs() > 0.001 ? WakeedColors.warn : WakeedColors.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: profit > 0.001
+                        ? WakeedColors.green
+                        : profit < -0.001
+                            ? WakeedColors.err
+                            : WakeedColors.accent,
                   ),
                 ),
               const Spacer(),

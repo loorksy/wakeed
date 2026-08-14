@@ -201,7 +201,6 @@ class AccountPickTarget {
   AccountPickTarget.credit(this.entryId) : type = 'credit';
   AccountPickTarget.chargeDebit(this.entryId) : type = 'chargeDebit';
   AccountPickTarget.chargeCredit(this.entryId) : type = 'chargeCredit';
-  AccountPickTarget.profit() : type = 'profit', entryId = null;
   AccountPickTarget.profitDebit(this.entryId) : type = 'profitDebit';
   AccountPickTarget.profitCredit(this.entryId) : type = 'profitCredit';
 

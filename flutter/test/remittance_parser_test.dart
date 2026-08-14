@@ -104,43 +104,45 @@ void main() {
   });
 
   group('buildProfitJournalRows', () {
-    test('adds debit balancing line when credit is larger', () {
+    test('sends written amounts and settles profit on المدين', () {
       final rows = buildProfitJournalRows(
         [
-          ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '1500', debit: '555', debitAmount: '1200'),
+          ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
         ],
-        profitAccount: '4000',
-        perVoucherBalance: true,
       );
       expect(rows.length, 3);
-      expect(rows[0].debit, '1200');
-      expect(rows[1].credit, '1500');
+      expect(rows[0].account, '555');
+      expect(rows[0].debit, '500');
+      expect(rows[1].account, '9830');
+      expect(rows[1].credit, '400');
       expect(rows[2].balancing, true);
-      expect(rows[2].account, '4000');
-      expect(rows[2].debit, '300');
-      expect(rows[2].credit, '');
+      expect(rows[2].account, '555');
+      expect(rows[2].credit, '100');
+      expect(profitPasteTotals([
+        ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
+      ])['diff'], 100);
     });
 
-    test('batch uses one net balancing line', () {
+    test('كسر settles as extra debit on المدين', () {
       final rows = buildProfitJournalRows(
         [
-          ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '1500', debit: '555', debitAmount: '1200'),
-          ProfitPasteRow(name: 'ب', credit: '1200', creditAmount: '2000', debit: '555', debitAmount: '1800'),
+          ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '500', debit: '555', debitAmount: '400'),
         ],
-        profitAccount: '4000',
       );
-      expect(profitLedgerGroups(rows).length, 2);
-      final balance = rows.where((r) => r.balancing).toList();
-      expect(balance.length, 1);
-      expect(balance.first.debit, '500');
+      expect(rows.length, 3);
+      expect(rows[0].debit, '400');
+      expect(rows[1].credit, '500');
+      expect(rows[2].balancing, true);
+      expect(rows[2].account, '555');
+      expect(rows[2].debit, '100');
+      expect(formatProfitSigned(-100), '100-');
     });
 
-    test('equal amounts have no balancing line', () {
+    test('equal amounts have no settlement line', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '100', debit: '555', debitAmount: '100'),
         ],
-        profitAccount: '4000',
       );
       expect(rows.length, 2);
       expect(rows.any((r) => r.balancing), false);

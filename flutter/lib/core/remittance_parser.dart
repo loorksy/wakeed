@@ -392,46 +392,20 @@ List<ProfitPasteRow> parseProfitTable(dynamic text) {
   return rows;
 }
 
-List<JournalRow> buildProfitJournalRows(
-  List<ProfitPasteRow> items, {
-  String profitAccount = '',
-  bool perVoucherBalance = false,
-}) {
+String formatProfitSigned(num diff) {
+  final abs = formatProfitAmount(diff.abs());
+  if (diff < -0.001) return '$abs-';
+  return abs;
+}
+
+String profitKindLabel(num diff) {
+  if (diff > 0.001) return 'ربح';
+  if (diff < -0.001) return 'كسر';
+  return 'فرق';
+}
+
+List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
   final rows = <JournalRow>[];
-  num netDebit = 0;
-  num netCredit = 0;
-  final profitAcc = profitAccount.trim();
-
-  void addBalance({
-    required String key,
-    required String name,
-    required num diff,
-    required String note,
-  }) {
-    if (diff.abs() <= 0.001 || profitAcc.isEmpty) return;
-    if (diff > 0) {
-      rows.add(JournalRow(
-        account: profitAcc,
-        description: name,
-        debit: formatProfitAmount(diff),
-        credit: '',
-        clientNote: note,
-        groupKey: key,
-        balancing: true,
-      ));
-    } else {
-      rows.add(JournalRow(
-        account: profitAcc,
-        description: name,
-        debit: '',
-        credit: formatProfitAmount(-diff),
-        clientNote: note,
-        groupKey: key,
-        balancing: true,
-      ));
-    }
-  }
-
   for (var i = 0; i < items.length; i++) {
     final item = items[i];
     if (!item.isComplete) continue;
@@ -456,23 +430,32 @@ List<JournalRow> buildProfitJournalRows(
       clientNote: note,
       groupKey: key,
     ));
-    final d = num.tryParse(dAmt) ?? 0;
-    final c = num.tryParse(cAmt) ?? 0;
-    if (perVoucherBalance) {
-      addBalance(key: key, name: name, diff: c - d, note: note);
+    final debitVal = num.tryParse(dAmt) ?? 0;
+    final creditVal = num.tryParse(cAmt) ?? 0;
+    final profit = debitVal - creditVal;
+    if (profit.abs() <= 0.001) continue;
+    // التسوية على حساب المدين نفسه: ربح له (دائن) أو كسر عليه (مدين).
+    if (profit > 0) {
+      rows.add(JournalRow(
+        account: item.debit.trim(),
+        description: name,
+        debit: '',
+        credit: formatProfitAmount(profit),
+        clientNote: note,
+        groupKey: key,
+        balancing: true,
+      ));
     } else {
-      netDebit += d;
-      netCredit += c;
+      rows.add(JournalRow(
+        account: item.debit.trim(),
+        description: name,
+        debit: formatProfitAmount(-profit),
+        credit: '',
+        clientNote: note,
+        groupKey: key,
+        balancing: true,
+      ));
     }
-  }
-
-  if (!perVoucherBalance) {
-    addBalance(
-      key: 'profit-balance',
-      name: 'تسوية فرق سند ربحي',
-      diff: netCredit - netDebit,
-      note: '',
-    );
   }
   return rows;
 }
@@ -520,7 +503,7 @@ Map<String, num> profitPasteTotals(List<ProfitPasteRow> items) {
     credit += num.tryParse(cleanAmount(item.creditAmount)) ?? 0;
     count += 1;
   }
-  return {'debit': debit, 'credit': credit, 'diff': credit - debit, 'count': count};
+  return {'debit': debit, 'credit': credit, 'diff': debit - credit, 'count': count};
 }
 
 final String profitSheetTemplate = [

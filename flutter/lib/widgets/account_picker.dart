@@ -33,7 +33,6 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
       'debit' => 'دليل الحسابات — المدين',
       'chargeDebit' => 'دليل الحسابات — المدين',
       'profitDebit' => 'دليل الحسابات — المدين',
-      'profit' => 'دليل الحسابات — حساب الربح',
       _ => 'دليل الحسابات — الدائن',
     };
     final list = app.filteredAccounts(query);
@@ -85,8 +84,7 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                           final acc = shown[i];
                           final code = pickAccountCode(acc);
                           final name = accountNameOf(acc);
-                          final active = (code == app.debitAccount && app.accountPickTarget.type == 'debit') ||
-                              (code == app.profitAccount && app.accountPickTarget.type == 'profit');
+                          final active = code == app.debitAccount && app.accountPickTarget.type == 'debit';
                           return ListTile(
                             selected: active,
                             title: Text(code, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -127,8 +125,6 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
         }
         app.updateProfitEntry(entry);
       }
-    } else if (target.type == 'profit') {
-      app.selectProfitAccount(code);
     } else {
       app.selectDebitAccount(code);
     }
