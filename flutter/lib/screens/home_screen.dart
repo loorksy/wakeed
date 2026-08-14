@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/constants.dart';
 import '../core/remittance_parser.dart';
 import '../models/models.dart';
 import '../state/app_controller.dart';
@@ -805,6 +807,16 @@ class LedgerTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
     final rows = app.filteredLedger();
+    final pageSize = ledgerPageSizeFor(
+      isWeb: kIsWeb,
+      width: MediaQuery.sizeOf(context).width,
+    );
+    final window = ledgerPageWindow(
+      total: rows.length,
+      pageSize: pageSize,
+      page: app.ledgerPage,
+    );
+    final pageRows = rows.isEmpty ? const <LedgerEntry>[] : rows.sublist(window.start, window.end);
     final vouchers = rows.map((r) => r.journalNumber.isNotEmpty ? r.journalNumber : (r.journalId.isNotEmpty ? r.journalId : r.id)).toSet();
     final sum = rows.fold<num>(0, (n, r) => n + r.amount);
     return ListView(
@@ -888,7 +900,7 @@ class LedgerTab extends StatelessWidget {
                     : 'لا نتائج لهذه الفلترة.',
                 columns: const ['رقم', 'تاريخ', 'وقت', 'الاسم', 'مبلغ', 'مدين', 'دائن', 'بيان', 'نوع'],
                 rows: [
-                  for (final row in rows)
+                  for (final row in pageRows)
                     [
                       row.journalNumber.isEmpty ? '—' : row.journalNumber,
                       row.entryDate,
@@ -904,8 +916,77 @@ class LedgerTab extends StatelessWidget {
                     ],
                 ],
               ),
+              if (rows.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _LedgerPager(
+                  page: window.page,
+                  pageCount: window.pageCount,
+                  start: window.start,
+                  end: window.end,
+                  total: rows.length,
+                  pageSize: pageSize,
+                  onPage: app.setLedgerPage,
+                ),
+              ],
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LedgerPager extends StatelessWidget {
+  const _LedgerPager({
+    required this.page,
+    required this.pageCount,
+    required this.start,
+    required this.end,
+    required this.total,
+    required this.pageSize,
+    required this.onPage,
+  });
+
+  final int page;
+  final int pageCount;
+  final int start;
+  final int end;
+  final int total;
+  final int pageSize;
+  final ValueChanged<int> onPage;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).textTheme.bodySmall;
+    return Column(
+      children: [
+        Text(
+          'عرض ${start + 1}–$end من $total · $pageSize في الصفحة',
+          style: muted,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: page > 0 ? () => onPage(page - 1) : null,
+                child: const Text('السابق'),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '${page + 1} / $pageCount',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Expanded(
+              child: FilledButton(
+                onPressed: page < pageCount - 1 ? () => onPage(page + 1) : null,
+                child: const Text('التالي'),
+              ),
+            ),
+          ],
         ),
       ],
     );

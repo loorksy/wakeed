@@ -69,6 +69,7 @@ class AppController extends ChangeNotifier {
   String ledgerFrom = '';
   String ledgerTo = '';
   String ledgerKind = '';
+  int ledgerPage = 0;
 
   Map<String, dynamic>? resolvedBatch;
   Map<String, dynamic>? resolvedEach;
@@ -748,21 +749,31 @@ class AppController extends ChangeNotifier {
 
   void setLedgerSearch(String v) {
     ledgerSearch = v;
+    ledgerPage = 0;
     _emit();
   }
 
   void setLedgerFrom(String v) {
     ledgerFrom = v;
+    ledgerPage = 0;
     _emit();
   }
 
   void setLedgerTo(String v) {
     ledgerTo = v;
+    ledgerPage = 0;
     _emit();
   }
 
   void setLedgerKindFilter(String v) {
     ledgerKind = v;
+    ledgerPage = 0;
+    _emit();
+  }
+
+  void setLedgerPage(int page) {
+    if (page < 0) page = 0;
+    ledgerPage = page;
     _emit();
   }
 
@@ -1483,6 +1494,7 @@ class AppController extends ChangeNotifier {
     ledgerFrom = '';
     ledgerTo = '';
     ledgerKind = '';
+    ledgerPage = 0;
     _emit();
   }
 
