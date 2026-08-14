@@ -48,7 +48,7 @@ npm start
 cd flutter
 flutter pub get
 flutter test
-flutter build apk --release
+flutter build apk --release --target-platform android-arm64
 cp build/app/outputs/flutter-apk/app-release.apk ../releases/wakeed-app.apk
 ```
 
