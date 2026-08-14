@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة الأدمن — وكيد</title>
+  <link rel="stylesheet" href="/styles.css?v=admin1">
+  <style>
+    body { min-height: 100dvh; background: var(--bg, #0b0f14); color: var(--text, #e2e8f0); }
+    .admin-wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+    .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .admin-head h1 { margin: 0; font-size: 1.35rem; }
+    .admin-card { background: var(--card, #111827); border: 1px solid var(--border, #1f2937); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .admin-table th, .admin-table td { padding: 10px 8px; border-bottom: 1px solid var(--border, #1f2937); text-align: right; vertical-align: top; }
+    .admin-table th { color: var(--muted, #94a3b8); font-weight: 600; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+    .badge-active { background: #064e3b; color: #6ee7b7; }
+    .badge-suspended { background: #78350f; color: #fcd34d; }
+    .badge-deleted { background: #450a0a; color: #fca5a5; }
+    .row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .row-actions button { font-size: 12px; padding: 4px 10px; }
+    .muted { color: var(--muted, #94a3b8); font-size: 12px; }
+    .license-key { font-family: ui-monospace, monospace; letter-spacing: 0.04em; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    .toolbar input { flex: 1; min-width: 180px; }
+    #adminStatus { min-height: 1.2em; margin-top: 8px; font-size: 13px; }
+    .error { color: #f87171; }
+    .ok { color: #34d399; }
+  </style>
+</head>
+<body>
+  <div class="admin-wrap">
+    <div class="admin-head">
+      <h1>لوحة الأدمن — تراخيص وكيد</h1>
+      <a href="/" class="secondary" style="text-decoration:none;padding:8px 12px;border-radius:8px;border:1px solid var(--border,#1f2937);">← التطبيق</a>
+    </div>
+
+    <section id="loginPanel" class="admin-card">
+      <h2 style="margin-top:0">تسجيل الدخول</h2>
+      <label>البريد</label>
+      <input type="email" id="adminEmail" autocomplete="username" placeholder="admin@example.com">
+      <label>كلمة المرور</label>
+      <input type="password" id="adminPassword" autocomplete="current-password" placeholder="••••••••">
+      <div class="actions actions-compact" style="margin-top:12px">
+        <button id="adminLoginBtn" class="primary" type="button">دخول</button>
+      </div>
+      <div id="loginStatus" class="muted"></div>
+    </section>
+
+    <section id="dashPanel" class="admin-card" hidden>
+      <div class="admin-head" style="margin-bottom:12px">
+        <div>
+          <strong id="adminUserLabel">—</strong>
+          <div class="muted">إدارة التراخيص</div>
+        </div>
+        <button id="adminLogoutBtn" type="button">خروج</button>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" id="newLicenseLabel" placeholder="تسمية اختيارية (مثلاً: عميل أحمد)">
+        <button id="createLicenseBtn" class="primary" type="button">+ ترخيص جديد</button>
+        <button id="refreshLicensesBtn" type="button">تحديث</button>
+      </div>
+      <div id="adminStatus"></div>
+
+      <div style="overflow-x:auto;margin-top:16px">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>المفتاح</th>
+              <th>التسمية</th>
+              <th>الحالة</th>
+              <th>الجهاز</th>
+              <th>آخر ظهور</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="licensesBody">
+            <tr><td colspan="6" class="muted">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const TOKEN_KEY = "wakeedAdmin.token";
+    let adminToken = localStorage.getItem(TOKEN_KEY) || "";
+
+    const els = {
+      loginPanel: document.getElementById("loginPanel"),
+      dashPanel: document.getElementById("dashPanel"),
+      adminEmail: document.getElementById("adminEmail"),
+      adminPassword: document.getElementById("adminPassword"),
+      adminLoginBtn: document.getElementById("adminLoginBtn"),
+      loginStatus: document.getElementById("loginStatus"),
+      adminUserLabel: document.getElementById("adminUserLabel"),
+      adminLogoutBtn: document.getElementById("adminLogoutBtn"),
+      newLicenseLabel: document.getElementById("newLicenseLabel"),
+      createLicenseBtn: document.getElementById("createLicenseBtn"),
+      refreshLicensesBtn: document.getElementById("refreshLicensesBtn"),
+      adminStatus: document.getElementById("adminStatus"),
+      licensesBody: document.getElementById("licensesBody"),
+    };
+
+    function setStatus(msg, kind) {
+      els.adminStatus.textContent = msg || "";
+      els.adminStatus.className = kind || "";
+    }
+
+    function authHeaders() {
+      return {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + adminToken,
+        "X-Admin-Token": adminToken,
+      };
+    }
+
+    async function adminFetch(path, options) {
+      options = options || {};
+      const res = await fetch(path, {
+        method: options.method || "GET",
+        headers: Object.assign({}, authHeaders(), options.headers || {}),
+        body: options.body,
+      });
+      const json = await res.json().catch(function () { return {}; });
+      if (!res.ok || json.ok === false) {
+        throw new Error(json.message || "HTTP " + res.status);
+      }
+      return json.data !== undefined ? json.data : json;
+    }
+
+    function statusBadge(status) {
+      const s = String(status || "active");
+      const cls = s === "active" ? "badge-active" : s === "suspended" ? "badge-suspended" : "badge-deleted";
+      const label = s === "active" ? "نشط" : s === "suspended" ? "موقوف" : "محذوف";
+      return '<span class="badge ' + cls + '">' + label + "</span>";
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString("ar-SY");
+      } catch (_) {
+        return iso;
+      }
+    }
+
+    function renderLicenses(list) {
+      if (!list.length) {
+        els.licensesBody.innerHTML = '<tr><td colspan="6" class="muted">لا توجد تراخيص.</td></tr>';
+        return;
+      }
+      els.licensesBody.innerHTML = list.map(function (lic) {
+        const device = lic.device_name || lic.device_id || "—";
+        const actions = [];
+        if (lic.status === "active") {
+          actions.push('<button type="button" data-act="suspend" data-id="' + lic.id + '">إيقاف</button>');
+        }
+        if (lic.status === "suspended") {
+          actions.push('<button type="button" data-act="activate" data-id="' + lic.id + '">تفعيل</button>');
+        }
+        if (lic.status !== "deleted") {
+          actions.push('<button type="button" data-act="delete" data-id="' + lic.id + '" class="danger">حذف</button>');
+        }
+        return (
+          "<tr>" +
+          '<td class="license-key">' + (lic.license_key || "—") + "</td>" +
+          "<td>" + (lic.label || "—") + "</td>" +
+          "<td>" + statusBadge(lic.status) + "</td>" +
+          "<td>" + device + "</td>" +
+          "<td>" + fmtDate(lic.last_seen_at) + "</td>" +
+          '<td><div class="row-actions">' + actions.join("") + "</div></td>" +
+          "</tr>"
+        );
+      }).join("");
+    }
+
+    async function loadLicenses() {
+      setStatus("جارٍ التحميل...");
+      const data = await adminFetch("/api/admin/licenses");
+      renderLicenses(data.licenses || []);
+      setStatus("");
+    }
+
+    function showDash(email) {
+      els.loginPanel.hidden = true;
+      els.dashPanel.hidden = false;
+      els.adminUserLabel.textContent = email || "أدمن";
+    }
+
+    function showLogin() {
+      els.dashPanel.hidden = true;
+      els.loginPanel.hidden = false;
+    }
+
+    els.adminLoginBtn.addEventListener("click", async function () {
+      els.loginStatus.textContent = "جارٍ الدخول...";
+      try {
+        const data = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: els.adminEmail.value.trim(),
+            password: els.adminPassword.value,
+          }),
+        }).then(function (r) { return r.json(); });
+        if (!data.ok) throw new Error(data.message || "فشل الدخول");
+        adminToken = data.data.token;
+        localStorage.setItem(TOKEN_KEY, adminToken);
+        els.adminPassword.value = "";
+        els.loginStatus.textContent = "";
+        showDash(data.data.email);
+        await loadLicenses();
+      } catch (err) {
+        els.loginStatus.textContent = err.message || "فشل الدخول";
+        els.loginStatus.className = "error";
+      }
+    });
+
+    els.adminLogoutBtn.addEventListener("click", async function () {
+      try {
+        await adminFetch("/api/admin/logout", { method: "POST" });
+      } catch (_) {}
+      adminToken = "";
+      localStorage.removeItem(TOKEN_KEY);
+      showLogin();
+    });
+
+    els.createLicenseBtn.addEventListener("click", async function () {
+      try {
+        setStatus("جارٍ الإنشاء...", "ok");
+        const data = await adminFetch("/api/admin/licenses", {
+          method: "POST",
+          body: JSON.stringify({ label: els.newLicenseLabel.value.trim() }),
+        });
+        els.newLicenseLabel.value = "";
+        setStatus("تم إنشاء: " + (data.license?.license_key || ""), "ok");
+        await loadLicenses();
+      } catch (err) {
+        setStatus(err.message, "error");
+      }
+    });
+
+    els.refreshLicensesBtn.addEventListener("click", function () {
+      loadLicenses().catch(function (e) { setStatus(e.message, "error"); });
+    });
+
+    els.licensesBody.addEventListener("click", async function (ev) {
+      const btn = ev.target.closest("button[data-act]");
+      if (!btn) return;
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      const confirmMsg = act === "delete" ? "حذف الترخيص نهائياً؟" : act === "suspend" ? "إيقاف الترخيص؟" : "تفعيل الترخيص؟";
+      if (!confirm(confirmMsg)) return;
+      try {
+        await adminFetch("/api/admin/licenses/" + id + "/" + act, { method: "POST" });
+        await loadLicenses();
+        setStatus("تم التحديث.", "ok");
+      } catch (err) {
+        setStatus(err.message, "error");
+      }
+    });
+
+    els.adminPassword.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") els.adminLoginBtn.click();
+    });
+
+    (async function boot() {
+      if (!adminToken) return;
+      try {
+        const me = await adminFetch("/api/admin/me");
+        showDash(me.email);
+        await loadLicenses();
+      } catch (_) {
+        adminToken = "";
+        localStorage.removeItem(TOKEN_KEY);
+      }
+    })();
+  </script>
+</body>
+</html>

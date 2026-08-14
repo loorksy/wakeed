@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0f14">
+  <title>تحميل تطبيق وكيد</title>
+  <link rel="stylesheet" href="/styles.css?v=dl1">
+  <style>
+    body { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg, #0b0f14); color: var(--text, #e2e8f0); }
+    .download-card { max-width: 420px; width: 100%; text-align: center; }
+    .download-card .mark { width: 56px; height: 56px; font-size: 28px; margin: 0 auto 16px; }
+    .download-card h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    .download-sub { color: var(--muted, #94a3b8); margin-bottom: 24px; line-height: 1.6; font-size: 14px; }
+    .download-btn { display: inline-block; padding: 14px 28px; font-size: 16px; border-radius: 10px; text-decoration: none; margin-bottom: 16px; }
+    .steps { text-align: right; font-size: 13px; color: var(--muted, #94a3b8); margin-top: 24px; line-height: 1.8; }
+    .steps ol { padding-right: 20px; margin: 0; }
+    #qrBox { margin: 16px auto; padding: 12px; background: #fff; border-radius: 8px; display: inline-block; }
+    #qrBox img { display: block; width: 160px; height: 160px; }
+    .version { font-size: 12px; color: var(--muted, #64748b); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="download-card card">
+    <div class="mark">و</div>
+    <h1>وكيد — سند حوالة</h1>
+    <p class="download-sub">
+      تطبيق أندرويد لتسجيل سندات الحوالة في وكيد.<br>
+      يتطلب مفتاح ترخيص واتصالاً دائماً بالسيرفر.
+    </p>
+    <a id="apkLink" class="primary download-btn" href="/releases/wakeed-app.apk" download>تنزيل APK</a>
+    <div id="qrBox" hidden>
+      <img id="qrImg" alt="QR code" width="160" height="160">
+    </div>
+    <p class="version">الإصدار 1.0.0</p>
+    <div class="steps">
+      <strong>خطوات التثبيت:</strong>
+      <ol>
+        <li>حمّل ملف APK وثبّته (فعّل «مصادر غير معروفة» إن طُلب).</li>
+        <li>افتح التطبيق وأدخل مفتاح الترخيص.</li>
+        <li>سجّل الدخول بحساب وكيد وابدأ العمل.</li>
+      </ol>
+    </div>
+    <p style="margin-top:20px"><a href="/" style="color:var(--accent,#38bdf8)">فتح نسخة الويب</a></p>
+  </div>
+  <script>
+    (function () {
+      var apkUrl = location.origin + "/releases/wakeed-app.apk";
+      var link = document.getElementById("apkLink");
+      if (link) link.href = apkUrl;
+      var qr = "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(apkUrl);
+      var box = document.getElementById("qrBox");
+      var img = document.getElementById("qrImg");
+      if (img && box) {
+        img.src = qr;
+        img.onload = function () { box.hidden = false; };
+        img.onerror = function () { box.hidden = true; };
+      }
+    })();
+  </script>
+</body>
+</html>

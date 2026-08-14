@@ -1,0 +1,14 @@
+{
+  "name": "wakeed-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Wakeed remittance mobile platform with licensing",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3"
+  }
+}

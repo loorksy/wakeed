@@ -1,0 +1,21 @@
+{
+  "name": "wakeed-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor Android shell for Wakeed Platform",
+  "scripts": {
+    "sync": "npx cap sync android",
+    "open": "npx cap open android",
+    "copy": "npx cap copy android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/device": "^6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "typescript": "^5.7.2"
+  }
+}

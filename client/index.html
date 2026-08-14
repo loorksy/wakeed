@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>وكيد — سند حوالة</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("wakeedApiApp.theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/styles.css?v=platform1">
+  <style>
+    #licenseScreen, #blockScreen { min-height: 100dvh; display: grid; place-items: center; padding: 16px; }
+    #blockScreen { background: #1a0a0a; }
+    #blockScreen .login-card { border-color: #7f1d1d; max-width: 420px; }
+    .license-hint { font-size: 12px; color: var(--muted, #94a3b8); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <section id="licenseScreen" class="login-screen">
+    <div class="login-card card">
+      <div class="login-head">
+        <div class="mark">و</div>
+        <div>
+          <h1>تفعيل الترخيص</h1>
+          <span class="login-sub">أدخل مفتاح الترخيص للمتابعة</span>
+        </div>
+      </div>
+      <label>مفتاح الترخيص</label>
+      <input type="text" id="licenseKeyInput" placeholder="WKD-XXXX-XXXX-XXXX" autocomplete="off">
+      <div class="actions actions-compact">
+        <button id="licenseActivateBtn" class="primary" type="button">تفعيل</button>
+      </div>
+      <div id="licenseStatus" class="status-line">جهاز واحد لكل ترخيص</div>
+      <p class="license-hint">يتطلب اتصالاً دائماً بالسيرفر. عند إيقاف الترخيص يتوقف التطبيق فوراً.</p>
+    </div>
+  </section>
+
+  <section id="blockScreen" class="login-screen" hidden>
+    <div class="login-card card">
+      <h1>التطبيق متوقف</h1>
+      <p id="blockMessage" class="status-line error">—</p>
+      <div class="actions actions-compact">
+        <button id="blockRetryBtn" class="primary" type="button">إعادة المحاولة</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="loginScreen" class="login-screen" hidden>
+    <div class="login-card card">
+      <div class="login-head">
+        <div class="mark">و</div>
+        <div>
+          <h1>وكيد</h1>
+          <span class="login-sub">سند حوالة</span>
+        </div>
+        <button type="button" id="loginThemeToggle" class="icon-btn" title="الوضع الليلي / الفاتح" aria-label="تبديل الوضع">◐</button>
+      </div>
+      <label>المستخدم</label>
+      <input type="text" id="username" autocomplete="username" placeholder="email@example.com">
+      <label>كلمة المرور</label>
+      <input type="password" id="password" autocomplete="current-password" placeholder="••••••••">
+      <div class="actions actions-compact">
+        <button id="loginBtn" class="primary" type="button">دخول</button>
+      </div>
+      <div id="connStatus" class="status-line">جاهز للدخول</div>
+    </div>
+  </section>
+
+  <div id="appScreen" class="app-shell" hidden>
+    <header class="app-bar">
+      <div class="app-bar-brand">
+        <div class="mark mark-sm">و</div>
+        <span class="app-bar-title">وكيد</span>
+      </div>
+
+      <div class="app-bar-nav-mobile">
+        <select id="mobileNav" class="nav-select" aria-label="التنقل">
+          <option value="create-batch">إنشاء · جماعي</option>
+          <option value="create-each">إنشاء · لكل عميل</option>
+          <option value="create-manual">فردي · لكل عميل</option>
+          <option value="ledger">السجل</option>
+        </select>
+      </div>
+
+      <div class="app-bar-actions">
+        <select id="subscription" class="compact-select" title="الشركة / الحساب"></select>
+        <div id="connBadge" class="badge">غير متصل</div>
+        <button type="button" id="themeToggle" class="icon-btn" title="الوضع الليلي / الفاتح" aria-label="تبديل الوضع">◐</button>
+        <button id="logoutBtn" class="ghost btn-sm" type="button">خروج</button>
+      </div>
+    </header>
+
+    <div class="app-layout">
+      <aside class="app-sidebar">
+        <nav class="side-nav view-tabs" role="tablist">
+          <button type="button" class="side-link tab active" data-view="create">إنشاء</button>
+          <button type="button" class="side-link tab" data-view="ledger">
+            السجل
+            <span id="ledgerCountBadge" class="tab-count">0</span>
+          </button>
+        </nav>
+        <nav id="createSideNav" class="side-subnav create-tabs" role="tablist">
+          <button type="button" class="side-sublink tab active" data-tab="batch">جماعي</button>
+          <button type="button" class="side-sublink tab" data-tab="each">لكل عميل</button>
+          <button type="button" class="side-sublink tab" data-tab="manual">فردي</button>
+        </nav>
+      </aside>
+
+      <main class="app-main">
+        <div id="createView" class="view-stack">
+          <section class="card settings-card">
+            <div class="card-head">
+              <h2>الإعدادات</h2>
+            </div>
+            <div class="meta settings-grid">
+              <div class="account-field span-2">
+                <label>حساب المدين</label>
+                <button type="button" id="debitAccountBtn" class="account-trigger">
+                  <span id="debitAccountLabel">اختر حساب</span>
+                </button>
+                <input type="hidden" id="debitAccount" value="">
+                <div class="inline-actions">
+                  <button id="saveDebitDefault" class="link" type="button">حفظ افتراضي</button>
+                  <span id="debitDefaultHint" class="muted"></span>
+                </div>
+              </div>
+              <div>
+                <label>التاريخ</label>
+                <input type="date" id="entryDate">
+              </div>
+              <div>
+                <label>نوع السند</label>
+                <select id="journalType">
+                  <option value="">بعد الدخول</option>
+                </select>
+              </div>
+              <div>
+                <label>مركز الكلفة</label>
+                <select id="costCenter">
+                  <option value="">—</option>
+                </select>
+              </div>
+            </div>
+            <div class="chk-row">
+              <div class="chk">
+                <input type="checkbox" id="useOpposite" checked>
+                <label for="useOpposite">حساب مقابل</label>
+              </div>
+              <div class="chk">
+                <input type="checkbox" id="includeCostCenter" checked>
+                <label for="includeCostCenter">مركز كلفة</label>
+              </div>
+            </div>
+          </section>
+
+          <section id="panelBatch" class="card tab-panel">
+            <div class="card-head">
+              <h2>سند جماعي</h2>
+              <button id="copyTemplate" class="link" type="button">قالب</button>
+            </div>
+            <label>البيان</label>
+            <input type="text" id="notes" placeholder="ملاحظة السند">
+            <p id="notesPreview" class="ui-hidden" hidden></p>
+            <label>البيانات</label>
+            <textarea id="data" placeholder="الاسم	المبلغ	الدائن"></textarea>
+            <div class="actions actions-compact">
+              <button id="previewBtn" class="secondary btn-sm" type="button">معاينة</button>
+              <button id="submitBtn" class="primary btn-sm" type="button">إنشاء</button>
+            </div>
+            <div class="totals totals-compact">
+              <div class="stat"><span>عملاء</span><b id="countCustomers">0</b></div>
+              <div class="stat"><span>أسطر</span><b id="countLines">0</b></div>
+              <div class="stat"><span>مدين</span><b id="sumDebit">0</b></div>
+              <div class="stat"><span>دائن</span><b id="sumCredit">0</b></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>البيان</th>
+                    <th>حساب</th>
+                    <th>مدين</th>
+                    <th>دائن</th>
+                    <th>محلول</th>
+                  </tr>
+                </thead>
+                <tbody id="previewBody">
+                  <tr><td colspan="6" class="muted">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="panelEach" class="card tab-panel" hidden>
+            <div class="card-head">
+              <h2>سند لكل عميل</h2>
+              <button id="copyTemplateEach" class="link" type="button">قالب</button>
+            </div>
+            <label>البيان</label>
+            <input type="text" id="notesEach" placeholder="ملاحظة السند">
+            <p id="notesPreviewEach" class="ui-hidden" hidden></p>
+            <label>البيانات</label>
+            <textarea id="dataEach" placeholder="الاسم	المبلغ	الدائن"></textarea>
+            <div class="actions actions-compact">
+              <button id="previewBtnEach" class="secondary btn-sm" type="button">معاينة</button>
+              <button id="submitBtnEach" class="primary btn-sm" type="button">إنشاء</button>
+            </div>
+            <div class="totals totals-compact">
+              <div class="stat"><span>سندات</span><b id="countVouchersEach">0</b></div>
+              <div class="stat"><span>عملاء</span><b id="countCustomersEach">0</b></div>
+              <div class="stat"><span>مدين</span><b id="sumDebitEach">0</b></div>
+              <div class="stat"><span>دائن</span><b id="sumCreditEach">0</b></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>سند</th>
+                    <th>#</th>
+                    <th>البيان</th>
+                    <th>حساب</th>
+                    <th>مدين</th>
+                    <th>دائن</th>
+                    <th>محلول</th>
+                  </tr>
+                </thead>
+                <tbody id="previewBodyEach">
+                  <tr><td colspan="7" class="muted">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="panelManual" class="card tab-panel" hidden>
+            <div class="card-head">
+              <h2>فردي — سند لكل عميل</h2>
+              <span id="manualEntryCount" class="muted tag">0</span>
+            </div>
+            <div id="manualEntriesList" class="manual-entries-list"></div>
+            <div class="manual-toolbar">
+              <button id="addManualEntryBtn" class="secondary btn-sm" type="button">+ سند</button>
+            </div>
+            <div class="actions actions-compact">
+              <button id="previewBtnManual" class="secondary btn-sm" type="button">معاينة</button>
+              <button id="submitBtnManual" class="primary btn-sm" type="button">تسجيل</button>
+            </div>
+            <div class="totals totals-compact">
+              <div class="stat"><span>سندات</span><b id="countVouchersManual">0</b></div>
+              <div class="stat"><span>مدين</span><b id="sumDebitManual">0</b></div>
+              <div class="stat"><span>دائن</span><b id="sumCreditManual">0</b></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>سند</th>
+                    <th>#</th>
+                    <th>البيان</th>
+                    <th>حساب</th>
+                    <th>مدين</th>
+                    <th>دائن</th>
+                    <th>محلول</th>
+                  </tr>
+                </thead>
+                <tbody id="previewBodyManual">
+                  <tr><td colspan="7" class="muted">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section id="ledgerView" class="view-stack" hidden>
+          <div class="card ledger-card">
+            <div class="card-head">
+              <h2>السجل</h2>
+            </div>
+            <div class="meta ledger-filters">
+              <div class="span-2">
+                <label>بحث</label>
+                <input type="search" id="ledgerSearch" placeholder="رقم، اسم، حساب..." autocomplete="off">
+              </div>
+              <div>
+                <label>من</label>
+                <input type="date" id="ledgerFrom">
+              </div>
+              <div>
+                <label>إلى</label>
+                <input type="date" id="ledgerTo">
+              </div>
+              <div>
+                <label>النوع</label>
+                <select id="ledgerKind">
+                  <option value="">الكل</option>
+                  <option value="batch">جماعي</option>
+                  <option value="each">فردي</option>
+                </select>
+              </div>
+            </div>
+            <div class="actions actions-compact ledger-actions">
+              <button id="ledgerSheetsBtn" class="primary btn-sm" type="button">Sheets</button>
+              <button id="ledgerFileBtn" class="secondary btn-sm" type="button">تنزيل</button>
+              <button id="ledgerClearFilters" class="ghost btn-sm" type="button">مسح</button>
+            </div>
+            <div class="totals totals-compact">
+              <div class="stat"><span>سندات</span><b id="ledgerVoucherCount">0</b></div>
+              <div class="stat"><span>أسماء</span><b id="ledgerNameCount">0</b></div>
+              <div class="stat"><span>مجموع</span><b id="ledgerSum">0</b></div>
+            </div>
+            <div class="table-wrap ledger-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>رقم</th>
+                    <th>تاريخ</th>
+                    <th>وقت</th>
+                    <th>الاسم</th>
+                    <th>مبلغ</th>
+                    <th>مدين</th>
+                    <th>دائن</th>
+                    <th>بيان</th>
+                    <th>نوع</th>
+                  </tr>
+                </thead>
+                <tbody id="ledgerBody">
+                  <tr><td colspan="9" class="muted">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="status" class="status" hidden aria-hidden="true"></div>
+  </div>
+
+  <div id="submitModal" class="modal" hidden>
+    <div class="modal-backdrop" id="submitModalBackdrop"></div>
+    <div class="modal-card submit-modal" role="dialog" aria-modal="true" aria-labelledby="submitModalTitle">
+      <button type="button" id="submitModalMinimize" class="submit-modal-minimize ghost btn-sm" hidden title="طي">طي</button>
+      <div id="submitModalIcon" class="submit-modal-icon loading" aria-hidden="true"></div>
+      <h3 id="submitModalTitle">جارٍ الإنشاء...</h3>
+      <p id="submitModalMessage" class="submit-modal-message"></p>
+      <div id="submitModalDetails" class="submit-modal-details"></div>
+      <div class="submit-modal-actions">
+        <button type="button" id="submitModalClose" class="primary btn-sm" hidden>إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" id="submitModalDock" class="submit-dock" hidden aria-live="polite">
+    <span id="submitModalDockIcon" class="submit-dock-icon loading" aria-hidden="true"></span>
+    <span class="submit-dock-text">
+      <strong id="submitModalDockTitle">جارٍ...</strong>
+      <small id="submitModalDockMessage"></small>
+    </span>
+  </button>
+
+  <div id="submitModeModal" class="modal" hidden>
+    <div class="modal-backdrop" id="submitModeBackdrop"></div>
+    <div class="modal-card submit-mode-modal" role="dialog" aria-modal="true" aria-labelledby="submitModeTitle">
+      <h3 id="submitModeTitle">طريقة التسجيل</h3>
+      <p id="submitModeSummary" class="submit-mode-summary"></p>
+      <div class="submit-mode-actions">
+        <button type="button" id="submitModeBatch" class="primary btn-sm">جماعي</button>
+        <button type="button" id="submitModeEach" class="secondary btn-sm">لكل عميل</button>
+        <button type="button" id="submitModeCancel" class="ghost btn-sm">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="accountModal" class="modal" hidden>
+    <div class="modal-backdrop" id="accountModalBackdrop"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+      <div class="modal-head">
+        <h3 id="accountModalTitle">دليل الحسابات</h3>
+        <button type="button" id="accountModalClose" class="ghost btn-sm">إغلاق</button>
+      </div>
+      <input type="search" id="debitAccountSearch" placeholder="رمز أو اسم" autocomplete="off">
+      <div id="accountModalMeta" class="modal-meta"></div>
+      <div id="accountModalList" class="account-list"></div>
+    </div>
+  </div>
+
+  <div hidden>
+    <input type="text" id="server" value="server1.wakeed.app">
+    <input type="text" id="buildNumber" value="3996">
+    <textarea id="token"></textarea>
+    <input type="text" id="ownerKey">
+    <input type="text" id="ownerUrl">
+  </div>
+
+  <script src="/parser.js?v=platform1"></script>
+  <script src="/capacitor-bridge.js?v=platform1"></script>
+  <script src="/platform.js?v=platform1"></script>
+  <script src="/api-client.js?v=platform1"></script>
+  <script src="/app.js?v=platform1"></script>
+</body>
+</html>

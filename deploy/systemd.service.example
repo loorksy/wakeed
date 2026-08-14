@@ -1,0 +1,16 @@
+[Unit]
+Description=Wakeed Platform API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/wakeed-platform
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/wakeed-platform/server/.env
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
