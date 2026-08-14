@@ -23,7 +23,8 @@ class HomeScreen extends StatelessWidget {
       'each' => 1,
       'manual' => 2,
       'charge' => 3,
-      'ledger' => 4,
+      'profit' => 4,
+      'ledger' => 5,
       _ => 0,
     };
     return Scaffold(
@@ -89,7 +90,7 @@ class HomeScreen extends StatelessWidget {
           TextButton(onPressed: app.logout, child: const Text('خروج')),
         ],
       ),
-      body: index == 4
+      body: index == 5
           ? const LedgerTab()
           : ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
@@ -100,27 +101,43 @@ class HomeScreen extends StatelessWidget {
                 if (index == 1) const EachTab(),
                 if (index == 2) const ManualTab(),
                 if (index == 3) const ChargeTab(),
+                if (index == 4) const ProfitTab(),
               ],
             ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (i) {
-          app.setTab(['batch', 'each', 'manual', 'charge', 'ledger'][i]);
-        },
-        destinations: [
-          const NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'جماعي'),
-          const NavigationDestination(icon: Icon(Icons.person_outline), label: 'لكل عميل'),
-          const NavigationDestination(icon: Icon(Icons.edit_note), label: 'فردي'),
-          const NavigationDestination(icon: Icon(Icons.local_shipping_outlined), label: 'شحن'),
-          NavigationDestination(
-            icon: Badge(
-              label: Text('${app.ownerLedger().length}'),
-              isLabelVisible: app.ownerLedger().isNotEmpty,
-              child: const Icon(Icons.receipt_long_outlined),
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          height: 68,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            return TextStyle(
+              fontSize: 11,
+              fontWeight: states.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w500,
+            );
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: index,
+          onDestinationSelected: (i) {
+            app.setTab(['batch', 'each', 'manual', 'charge', 'profit', 'ledger'][i]);
+          },
+          destinations: [
+            const NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'جماعي'),
+            const NavigationDestination(icon: Icon(Icons.person_outline), label: 'لكل عميل'),
+            const NavigationDestination(icon: Icon(Icons.edit_note), label: 'فردي'),
+            const NavigationDestination(icon: Icon(Icons.local_shipping_outlined), label: 'شحن'),
+            const NavigationDestination(icon: Icon(Icons.trending_up), label: 'ربحي'),
+            NavigationDestination(
+              icon: Badge(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                largeSize: 12,
+                textStyle: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700, height: 1),
+                label: Text('${app.ownerLedger().length}'),
+                isLabelVisible: app.ownerLedger().isNotEmpty,
+                child: const Icon(Icons.receipt_long_outlined),
+              ),
+              label: 'السجل',
             ),
-            label: 'السجل',
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -800,6 +817,384 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
   }
 }
 
+class ProfitTab extends StatefulWidget {
+  const ProfitTab({super.key});
+
+  @override
+  State<ProfitTab> createState() => _ProfitTabState();
+}
+
+class _ProfitTabState extends State<ProfitTab> {
+  late final TextEditingController notes;
+  late final TextEditingController data;
+
+  @override
+  void initState() {
+    super.initState();
+    final app = context.read<AppController>();
+    notes = TextEditingController(text: app.notesProfit);
+    data = TextEditingController(text: app.tableProfit);
+  }
+
+  @override
+  void dispose() {
+    notes.dispose();
+    data.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    if (app.tableProfit.isEmpty && data.text.isNotEmpty) data.clear();
+    if (app.notesProfit.isEmpty && notes.text.isNotEmpty) notes.clear();
+    app.ensureProfitEntries();
+    final rows = app.profitRows();
+    final groups = profitLedgerGroups(rows);
+    final t = app.totals(rows);
+    final paste = app.currentProfitPaste();
+    final pt = profitPasteTotals(paste);
+    final diff = pt['diff'] ?? 0;
+    final keyIndex = <String, int>{};
+    var voucherNo = 0;
+    final tableRows = <List<String>>[
+      for (var i = 0; i < rows.length; i++)
+        [
+          () {
+            final row = rows[i];
+            if (row.balancing && row.groupKey == 'profit-balance') return 'فرق';
+            final key = row.groupKey.isEmpty ? 'r$i' : row.groupKey;
+            return '${keyIndex.putIfAbsent(key, () => ++voucherNo)}';
+          }(),
+          '${i + 1}',
+          app.composeNote(
+            rows[i].description,
+            rows[i].clientNote.isNotEmpty ? rows[i].clientNote : app.sectionNote('profit'),
+          ),
+          rows[i].account,
+          rows[i].debit,
+          rows[i].credit,
+          app.resolvedLabel(app.resolvedProfit, rows[i].account),
+        ],
+    ];
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('سند ربحي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'batch', label: Text('جماعي'), icon: Icon(Icons.groups_outlined, size: 16)),
+              ButtonSegment(value: 'each', label: Text('فردي'), icon: Icon(Icons.edit_note, size: 16)),
+            ],
+            selected: {app.profitMode},
+            onSelectionChanged: (v) => app.setProfitMode(v.first),
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          ),
+          const SizedBox(height: 10),
+          if (app.profitMode == 'batch') ...[
+            Row(
+              children: [
+                const Expanded(child: Text('لصق الدائن والمدين', style: TextStyle(fontWeight: FontWeight.w700))),
+                TextButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: profitSheetTemplate));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ القالب')));
+                    }
+                  },
+                  child: const Text('قالب'),
+                ),
+              ],
+            ),
+            const Text('البيان'),
+            const SizedBox(height: 4),
+            TextField(
+              controller: notes,
+              decoration: const InputDecoration(hintText: 'ملاحظة السند'),
+              onChanged: app.setNotesProfit,
+            ),
+            const SizedBox(height: 8),
+            const Text('البيانات'),
+            const SizedBox(height: 4),
+            TextField(
+              controller: data,
+              minLines: 5,
+              maxLines: 10,
+              decoration: const InputDecoration(hintText: 'الدائن\tمبلغ الدائن\tالمدين\tمبلغ المدين'),
+              onChanged: app.setTableProfit,
+            ),
+          ] else ...[
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('فردي — سند لكل بطاقة', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                Text('${app.profitEntries.length}', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 640;
+                final width = wide ? (constraints.maxWidth - 8) / 2 : constraints.maxWidth;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < app.profitEntries.length; i++)
+                      SizedBox(
+                        width: width,
+                        child: _ProfitEntryCard(
+                          key: ValueKey(app.profitEntries[i].id),
+                          index: i,
+                          entry: app.profitEntries[i],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(onPressed: app.addProfitEntry, child: const Text('+ سند جديد')),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: app.busy ? null : app.previewProfit,
+                  child: const Text('معاينة'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: app.submitJob.active ? null : app.submitProfit,
+                  child: const Text('إنشاء'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              StatChip(label: 'سندات', value: '${groups.length}'),
+              const SizedBox(width: 6),
+              StatChip(label: 'مدين', value: '${pt['debit'] ?? t['debit']}', color: WakeedColors.pink),
+              const SizedBox(width: 6),
+              StatChip(label: 'دائن', value: '${pt['credit'] ?? t['credit']}', color: WakeedColors.green),
+              const SizedBox(width: 6),
+              StatChip(
+                label: 'فرق',
+                value: formatProfitAmount(diff.abs()),
+                color: diff.abs() > 0.001 ? WakeedColors.warn : WakeedColors.accent,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          PreviewTable(
+            columns: const ['سند', '#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
+            rows: tableRows,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfitEntryCard extends StatefulWidget {
+  const _ProfitEntryCard({super.key, required this.index, required this.entry});
+
+  final int index;
+  final ProfitEntry entry;
+
+  @override
+  State<_ProfitEntryCard> createState() => _ProfitEntryCardState();
+}
+
+class _ProfitEntryCardState extends State<_ProfitEntryCard> {
+  late final TextEditingController nameCtrl;
+  late final TextEditingController creditCtrl;
+  late final TextEditingController creditAmtCtrl;
+  late final TextEditingController debitCtrl;
+  late final TextEditingController debitAmtCtrl;
+  late final TextEditingController noteCtrl;
+
+  static const _dense = InputDecoration(
+    isDense: true,
+    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    nameCtrl = TextEditingController(text: widget.entry.name);
+    creditCtrl = TextEditingController(text: widget.entry.credit);
+    creditAmtCtrl = TextEditingController(text: widget.entry.creditAmount);
+    debitCtrl = TextEditingController(text: widget.entry.debit);
+    debitAmtCtrl = TextEditingController(text: widget.entry.debitAmount);
+    noteCtrl = TextEditingController(text: widget.entry.note);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfitEntryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
+    if (debitCtrl.text != widget.entry.debit) debitCtrl.text = widget.entry.debit;
+    if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
+    if (creditAmtCtrl.text != widget.entry.creditAmount && widget.entry.creditAmount.isEmpty) creditAmtCtrl.clear();
+    if (debitAmtCtrl.text != widget.entry.debitAmount && widget.entry.debitAmount.isEmpty) debitAmtCtrl.clear();
+    if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    creditCtrl.dispose();
+    creditAmtCtrl.dispose();
+    debitCtrl.dispose();
+    debitAmtCtrl.dispose();
+    noteCtrl.dispose();
+    super.dispose();
+  }
+
+  void _sync() {
+    final app = context.read<AppController>();
+    widget.entry
+      ..name = nameCtrl.text
+      ..credit = creditCtrl.text
+      ..creditAmount = creditAmtCtrl.text
+      ..debit = debitCtrl.text
+      ..debitAmount = debitAmtCtrl.text
+      ..note = noteCtrl.text;
+    app.updateProfitEntry(widget.entry);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    final c = num.tryParse(cleanAmount(creditAmtCtrl.text)) ?? 0;
+    final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
+    final diff = c - d;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(width: 8),
+              if (c > 0 || d > 0)
+                Text(
+                  'فرق ${formatProfitAmount(diff.abs())}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: diff.abs() > 0.001 ? WakeedColors.warn : WakeedColors.accent,
+                  ),
+                ),
+              const Spacer(),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'حذف',
+                onPressed: app.profitEntries.length > 1 ? () => app.removeProfitEntry(widget.entry.id) : null,
+                icon: const Icon(Icons.close, size: 18),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: creditCtrl,
+                  decoration: _dense.copyWith(labelText: 'الدائن'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'اختر الدائن',
+                onPressed: () => showAccountPicker(context, target: AccountPickTarget.profitCredit(widget.entry.id)),
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+              ),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: creditAmtCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: _dense.copyWith(labelText: 'مبلغ الدائن'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: debitCtrl,
+                  decoration: _dense.copyWith(labelText: 'المدين'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'اختر المدين',
+                onPressed: () => showAccountPicker(context, target: AccountPickTarget.profitDebit(widget.entry.id)),
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+              ),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: debitAmtCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: _dense.copyWith(labelText: 'مبلغ المدين'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: nameCtrl,
+                  decoration: _dense.copyWith(labelText: 'الاسم', hintText: 'اختياري'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: TextField(
+                  controller: noteCtrl,
+                  decoration: _dense.copyWith(labelText: 'البيان', hintText: 'اختياري'),
+                  onChanged: (_) => _sync(),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class LedgerTab extends StatelessWidget {
   const LedgerTab({super.key});
 
@@ -861,6 +1256,7 @@ class LedgerTab extends StatelessWidget {
                   DropdownMenuItem(value: 'batch', child: Text('جماعي')),
                   DropdownMenuItem(value: 'each', child: Text('لكل عميل')),
                   DropdownMenuItem(value: 'charge', child: Text('شحن')),
+                  DropdownMenuItem(value: 'profit', child: Text('ربحي')),
                   DropdownMenuItem(value: 'synced', child: Text('متزامن')),
                 ],
                 onChanged: (v) => app.setLedgerKindFilter(v ?? ''),

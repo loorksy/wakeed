@@ -19,7 +19,31 @@ class SettingsCard extends StatelessWidget {
         children: [
           const Text('الإعدادات', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
-          if (app.createTab != 'charge') ...[
+          if (app.createTab == 'profit') ...[
+          const Text('حساب الربح / تسوية الفرق', style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 4),
+          OutlinedButton(
+            onPressed: () => showAccountPicker(context, target: AccountPickTarget.profit()),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              alignment: Alignment.centerRight,
+            ),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(app.profitAccountLabel(), overflow: TextOverflow.ellipsis),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              TextButton(onPressed: app.saveProfitDefault, child: const Text('حفظ افتراضي')),
+              Text(app.profitDefaultHint(), style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ] else if (app.createTab != 'charge') ...[
           const Text('حساب المدين', style: TextStyle(fontSize: 12)),
           const SizedBox(height: 4),
           OutlinedButton(

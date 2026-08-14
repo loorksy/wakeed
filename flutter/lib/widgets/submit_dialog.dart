@@ -15,7 +15,8 @@ class SubmitOverlay extends StatelessWidget {
     if (data == null) return const SizedBox.shrink();
     final loading = data.phase == SubmitPhase.loading;
     final success = data.phase == SubmitPhase.success;
-    final color = loading
+    final confirm = data.phase == SubmitPhase.confirm;
+    final color = loading || confirm
         ? WakeedColors.accent
         : success
             ? WakeedColors.green
@@ -44,7 +45,14 @@ class SubmitOverlay extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           else
-                            Icon(success ? Icons.check_circle : Icons.error, color: color),
+                            Icon(
+                              confirm
+                                  ? Icons.balance
+                                  : success
+                                      ? Icons.check_circle
+                                      : Icons.error,
+                              color: color,
+                            ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(data.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
@@ -66,13 +74,32 @@ class SubmitOverlay extends StatelessWidget {
                       ],
                       if (!loading) ...[
                         const SizedBox(height: 14),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: FilledButton(
-                            onPressed: app.clearDialog,
-                            child: const Text('إغلاق'),
+                        if (confirm)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: app.cancelPendingSubmit,
+                                  child: const Text('إلغاء'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: app.confirmPendingSubmit,
+                                  child: const Text('تأكيد الإنشاء'),
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: FilledButton(
+                              onPressed: app.clearDialog,
+                              child: const Text('إغلاق'),
+                            ),
                           ),
-                        ),
                       ],
                     ],
                   ),

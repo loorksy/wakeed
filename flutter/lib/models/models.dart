@@ -90,6 +90,48 @@ class WakeedSubscription {
   }
 }
 
+class ProfitEntry {
+  ProfitEntry({
+    required this.id,
+    this.name = '',
+    this.debit = '',
+    this.debitAmount = '',
+    this.credit = '',
+    this.creditAmount = '',
+    this.note = '',
+  });
+
+  String id;
+  String name;
+  String debit;
+  String debitAmount;
+  String credit;
+  String creditAmount;
+  String note;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'debit': debit,
+        'debitAmount': debitAmount,
+        'credit': credit,
+        'creditAmount': creditAmount,
+        'note': note,
+      };
+
+  factory ProfitEntry.fromJson(Map<String, dynamic> json) {
+    return ProfitEntry(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      debit: (json['debit'] ?? '').toString(),
+      debitAmount: (json['debitAmount'] ?? json['debit_amount'] ?? '').toString(),
+      credit: (json['credit'] ?? '').toString(),
+      creditAmount: (json['creditAmount'] ?? json['credit_amount'] ?? '').toString(),
+      note: (json['note'] ?? '').toString(),
+    );
+  }
+}
+
 class ManualEntry {
   ManualEntry({
     required this.id,
@@ -144,7 +186,7 @@ class PreparedJournal {
 
 enum AppPhase { boot, license, blocked, login, home }
 
-enum SubmitPhase { loading, success, error }
+enum SubmitPhase { loading, success, error, confirm }
 
 class SubmitJob {
   bool active = false;
@@ -159,6 +201,9 @@ class AccountPickTarget {
   AccountPickTarget.credit(this.entryId) : type = 'credit';
   AccountPickTarget.chargeDebit(this.entryId) : type = 'chargeDebit';
   AccountPickTarget.chargeCredit(this.entryId) : type = 'chargeCredit';
+  AccountPickTarget.profit() : type = 'profit', entryId = null;
+  AccountPickTarget.profitDebit(this.entryId) : type = 'profitDebit';
+  AccountPickTarget.profitCredit(this.entryId) : type = 'profitCredit';
 
   final String type;
   final String? entryId;

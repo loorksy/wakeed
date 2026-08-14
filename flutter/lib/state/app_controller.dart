@@ -47,6 +47,13 @@ class AppController extends ChangeNotifier {
   String tableEach = '';
   List<ManualEntry> manualEntries = [];
   List<ManualEntry> chargeEntries = [];
+  List<ProfitEntry> profitEntries = [];
+  String notesProfit = '';
+  String tableProfit = '';
+  String profitAccount = '';
+  String pendingProfitCode = '';
+  Map<String, String> profitDefaults = {};
+  String profitMode = 'batch'; // batch | each
   String wakeedUserId = '';
   bool ledgerSyncing = false;
 
@@ -75,11 +82,13 @@ class AppController extends ChangeNotifier {
   Map<String, dynamic>? resolvedEach;
   Map<String, dynamic>? resolvedManual;
   Map<String, dynamic>? resolvedCharge;
+  Map<String, dynamic>? resolvedProfit;
 
   final SubmitJob submitJob = SubmitJob();
   AccountPickTarget accountPickTarget = AccountPickTarget.debit();
 
-  String createTab = 'batch'; // batch | each | manual | charge | ledger
+  String createTab = 'batch'; // batch | each | manual | charge | profit | ledger
+  PreparedJournal? pendingConfirmPrepared;
 
   Timer? _saveTimer;
   StreamSubscription<List<ConnectivityResult>>? _connSub;
@@ -144,6 +153,7 @@ class AppController extends ChangeNotifier {
     createTab = 'batch';
     await loadLocal();
     ensureManualEntries();
+    ensureProfitEntries();
     if (platform.wakeedToken.isNotEmpty) {
       loginStatus = 'جارٍ استعادة الجلسة...';
       loginError = false;
@@ -437,6 +447,12 @@ class AppController extends ChangeNotifier {
       'tableEach': tableEach,
       'manualEntries': manualEntries.map((e) => e.toJson()).toList(),
       'chargeEntries': chargeEntries.map((e) => e.toJson()).toList(),
+      'profitEntries': profitEntries.map((e) => e.toJson()).toList(),
+      'notesProfit': notesProfit,
+      'tableProfit': tableProfit,
+      'profitAccount': profitAccount,
+      'profitDefaults': profitDefaults,
+      'profitMode': profitMode,
       'userDisplayName': platform.userDisplayName,
       'subscriptions': platform.subscriptions,
     };
@@ -491,6 +507,21 @@ class AppController extends ChangeNotifier {
             .whereType<Map>()
             .map((e) => ManualEntry.fromJson(Map<String, dynamic>.from(e)))
             .toList();
+      }
+      if (settings['profitEntries'] is List && (settings['profitEntries'] as List).isNotEmpty) {
+        profitEntries = (settings['profitEntries'] as List)
+            .whereType<Map>()
+            .map((e) => ProfitEntry.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
+      if (settings['notesProfit'] != null) notesProfit = settings['notesProfit'].toString();
+      if (settings['tableProfit'] != null) tableProfit = settings['tableProfit'].toString();
+      if (settings['profitDefaults'] is Map) {
+        profitDefaults = (settings['profitDefaults'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
+      }
+      if (settings['profitAccount'] != null) pendingProfitCode = settings['profitAccount'].toString();
+      if (settings['profitMode'] == 'each' || settings['profitMode'] == 'batch') {
+        profitMode = settings['profitMode'].toString();
       }
       if (settings['table'] != null) tableBatch = settings['table'].toString();
       if (settings['tableEach'] != null) tableEach = settings['tableEach'].toString();
@@ -685,7 +716,25 @@ class AppController extends ChangeNotifier {
       );
       debitAccount = pickAccountCode(fallback);
     }
+    fillProfitAccount();
     _emit();
+  }
+
+  String preferredProfitCode() {
+    final owner = currentOwnerKey();
+    if (owner.isNotEmpty && profitDefaults[owner] != null && profitDefaults[owner]!.isNotEmpty) {
+      return profitDefaults[owner]!;
+    }
+    return pendingProfitCode;
+  }
+
+  void fillProfitAccount() {
+    final preferred = preferredProfitCode();
+    if (preferred.isNotEmpty && accounts.any((a) => pickAccountCode(a) == preferred)) {
+      profitAccount = preferred;
+    } else if (preferred.isNotEmpty) {
+      profitAccount = preferred;
+    }
   }
 
   String debitAccountLabel() {
@@ -727,6 +776,47 @@ class AppController extends ChangeNotifier {
     debitDefaults[owner] = code;
     saveLocal();
     showSubmitSuccess('تم الحفظ', 'تم حفظ الحساب الافتراضي.', debitAccountLabel());
+  }
+
+  String profitAccountLabel() {
+    final selected = accounts.where((a) => pickAccountCode(a) == profitAccount).toList();
+    if (selected.isNotEmpty) return accountLabel(selected.first);
+    if (profitAccount.isNotEmpty) return profitAccount;
+    if (accounts.isNotEmpty) return 'اختر حساب الربح لتسوية الفرق';
+    return 'يُحمَّل الدليل بعد الدخول';
+  }
+
+  String profitDefaultHint() {
+    final owner = currentOwnerKey();
+    final code = owner.isNotEmpty ? profitDefaults[owner] : null;
+    if (code == null || code.isEmpty) return 'يُستخدم لتسوية فرق الدائن والمدين.';
+    final acc = accounts.where((a) => pickAccountCode(a) == code).toList();
+    return 'الافتراضي: ${acc.isNotEmpty ? accountLabel(acc.first) : code}';
+  }
+
+  void selectProfitAccount(String code) {
+    final value = code.trim();
+    if (value.isEmpty) return;
+    profitAccount = value;
+    pendingProfitCode = value;
+    saveLocal();
+    _emit();
+  }
+
+  void saveProfitDefault() {
+    final code = profitAccount.trim();
+    final owner = currentOwnerKey();
+    if (code.isEmpty) {
+      showSubmitError('حساب الربح', 'اختر حساباً من الدليل ثم احفظه كافتراضي.');
+      return;
+    }
+    if (owner.isEmpty) {
+      showSubmitError('غير متصل', 'سجّل الدخول أولاً.');
+      return;
+    }
+    profitDefaults[owner] = code;
+    saveLocal();
+    showSubmitSuccess('تم الحفظ', 'تم حفظ حساب الربح الافتراضي.', profitAccountLabel());
   }
 
   List<dynamic> filteredAccounts(String filter) {
@@ -785,6 +875,14 @@ class AppController extends ChangeNotifier {
 
   void setTab(String tab) {
     createTab = tab;
+    if (tab == 'profit') ensureProfitEntries();
+    _emit();
+  }
+
+  void setProfitMode(String mode) {
+    profitMode = mode == 'each' ? 'each' : 'batch';
+    if (profitMode == 'each') ensureProfitEntries();
+    scheduleSaveLocal();
     _emit();
   }
 
@@ -809,6 +907,18 @@ class AppController extends ChangeNotifier {
   void setNotesEach(String v) {
     notesEach = v;
     scheduleSaveLocal();
+    _emit();
+  }
+
+  void setNotesProfit(String v) {
+    notesProfit = v;
+    scheduleSaveLocal();
+    _emit();
+  }
+
+  void setTableProfit(String v) {
+    tableProfit = v;
+    resolvedProfit = null;
     _emit();
   }
 
@@ -855,6 +965,7 @@ class AppController extends ChangeNotifier {
   String sectionNote(String section) {
     if (section == 'each') return notesEach.trim();
     if (section == 'batch') return notesBatch.trim();
+    if (section == 'profit') return notesProfit.trim();
     return '';
   }
 
@@ -871,7 +982,9 @@ class AppController extends ChangeNotifier {
   }
 
   String groupStatement(CustomerGroup group, String section) {
-    final extra = (section == 'manual' || section == 'charge') ? groupClientNote(group) : sectionNote(section);
+    final extra = (section == 'manual' || section == 'charge' || section == 'profit')
+        ? groupClientNote(group)
+        : sectionNote(section);
     return composeNote(group.name, extra);
   }
 
@@ -941,6 +1054,75 @@ class AppController extends ChangeNotifier {
     chargeEntries = [ManualEntry(id: manualEntryId())];
     saveLocal();
     _emit();
+  }
+
+  void ensureProfitEntries() {
+    if (profitEntries.isEmpty) {
+      profitEntries = [ProfitEntry(id: manualEntryId())];
+    }
+  }
+
+  void addProfitEntry() {
+    ensureProfitEntries();
+    profitEntries.add(ProfitEntry(id: manualEntryId()));
+    saveLocal();
+    _emit();
+  }
+
+  void removeProfitEntry(String id) {
+    if (profitEntries.length <= 1) return;
+    profitEntries = profitEntries.where((e) => e.id != id).toList();
+    saveLocal();
+    _emit();
+  }
+
+  void updateProfitEntry(ProfitEntry entry) {
+    final i = profitEntries.indexWhere((e) => e.id == entry.id);
+    if (i >= 0) profitEntries[i] = entry;
+    resolvedProfit = null;
+    scheduleSaveLocal();
+    _emit();
+  }
+
+  void clearProfitForm() {
+    if (profitMode == 'each') {
+      profitEntries = [ProfitEntry(id: manualEntryId())];
+    } else {
+      notesProfit = '';
+      tableProfit = '';
+    }
+    resolvedProfit = null;
+    saveLocal();
+    _emit();
+  }
+
+  List<ProfitPasteRow> currentProfitPaste() {
+    if (profitMode == 'each') {
+      return [
+        for (final entry in profitEntries)
+          ProfitPasteRow(
+            name: entry.name.trim().isNotEmpty
+                ? entry.name.trim()
+                : (entry.credit.trim().isNotEmpty && entry.debit.trim().isNotEmpty
+                    ? '${entry.credit} / ${entry.debit}'
+                    : ''),
+            credit: entry.credit,
+            creditAmount: entry.creditAmount,
+            debit: entry.debit,
+            debitAmount: entry.debitAmount,
+            note: entry.note,
+          ),
+      ].where((e) => e.isComplete).toList();
+    }
+    return parseProfitTable(tableProfit);
+  }
+
+  List<JournalRow> profitRows() {
+    return buildProfitJournalRows(
+      currentProfitPaste(),
+      profitAccount: profitAccount,
+      perVoucherBalance: profitMode == 'each',
+    );
   }
 
   void ensureManualEntries() {
@@ -1112,7 +1294,7 @@ class AppController extends ChangeNotifier {
     final note = extras['lineNote'] ??
         composeNote(
           row.description,
-          extras['section'] == 'manual' || extras['section'] == 'charge'
+          extras['section'] == 'manual' || extras['section'] == 'charge' || extras['section'] == 'profit'
               ? row.clientNote
               : sectionNote((extras['section'] ?? 'batch').toString()),
         );
@@ -1141,6 +1323,17 @@ class AppController extends ChangeNotifier {
     return detail;
   }
 
+  JournalRow? _profitOpposite(JournalRow row, List<JournalRow> rows) {
+    if (row.balancing) return null;
+    final others = rows.where((r) => r.groupKey == row.groupKey && !r.balancing && r != row);
+    if (row.debit.isNotEmpty) {
+      final found = others.where((r) => r.credit.isNotEmpty);
+      return found.isEmpty ? null : found.first;
+    }
+    final found = others.where((r) => r.debit.isNotEmpty);
+    return found.isEmpty ? null : found.first;
+  }
+
   Map<String, dynamic> buildJournal(
     List<JournalRow> rows,
     Map<String, dynamic> resolved, {
@@ -1156,14 +1349,16 @@ class AppController extends ChangeNotifier {
     final details = <Map<String, dynamic>>[];
     for (var i = 0; i < rows.length; i++) {
       final row = rows[i];
-      final opposite = i % 2 == 0
+      final opposite = section == 'profit' ? _profitOpposite(row, rows) : (i % 2 == 0
           ? (i + 1 < rows.length ? rows[i + 1] : null)
-          : rows[i - 1];
+          : rows[i - 1]);
       final correspondingId = useOpposite && opposite != null
           ? pickId(resolved[normalizeAccountKey(opposite.account)])
           : '';
       final lineExtra = lineNote ??
-          ((section == 'manual' || section == 'charge') ? row.clientNote : sectionNote(section));
+          ((section == 'manual' || section == 'charge' || section == 'profit')
+              ? row.clientNote
+              : sectionNote(section));
       details.add(buildDetail(row, resolved[normalizeAccountKey(row.account)], i, dateIso, {
         'costCenterId': ccId,
         'correspondingId': correspondingId,
@@ -1177,7 +1372,7 @@ class AppController extends ChangeNotifier {
       throw PlatformApiException('القيد غير متوازن: مدين ${t['debit']} ≠ دائن ${t['credit']}');
     }
 
-    final journalNotes = notes ?? ((section == 'manual' || section == 'charge') ? '' : sectionNote(section));
+    final journalNotes = notes ?? ((section == 'manual' || section == 'charge' || section == 'profit') ? '' : sectionNote(section));
     final notesFinal = (journalNotes.isNotEmpty ? journalNotes : 'سند حوالة');
     final tType = currentJournalType();
     dynamic scopeId;
@@ -1314,8 +1509,14 @@ class AppController extends ChangeNotifier {
     final now = DateTime.now().toUtc().toIso8601String();
     final dateVal = (date ?? entryDate).toString();
     final rows = groups.map((group) {
-      final debitRow = group.rows.firstWhere((r) => r.debit.isNotEmpty, orElse: () => group.rows.first);
-      final creditRow = group.rows.firstWhere((r) => r.credit.isNotEmpty, orElse: () => group.rows.last);
+      final debitRow = group.rows.firstWhere(
+        (r) => r.debit.isNotEmpty && !r.balancing,
+        orElse: () => group.rows.firstWhere((r) => r.debit.isNotEmpty, orElse: () => group.rows.first),
+      );
+      final creditRow = group.rows.firstWhere(
+        (r) => r.credit.isNotEmpty && !r.balancing,
+        orElse: () => group.rows.firstWhere((r) => r.credit.isNotEmpty, orElse: () => group.rows.last),
+      );
       final debit = resolvedAccountInfo(resolved, debitRow.account);
       final credit = resolvedAccountInfo(resolved, creditRow.account);
       final amount = numOf(debitRow.debit.isNotEmpty ? debitRow.debit : creditRow.credit);
@@ -1403,6 +1604,8 @@ class AppController extends ChangeNotifier {
         return 'فردي';
       case 'charge':
         return 'شحن';
+      case 'profit':
+        return 'ربحي';
       case 'synced':
         return 'متزامن';
       default:
@@ -1568,7 +1771,7 @@ class AppController extends ChangeNotifier {
   DialogData? lastDialog;
 
   void _persistDialog(DialogData? data) {
-    if (data == null || data.phase == SubmitPhase.loading) {
+    if (data == null || data.phase == SubmitPhase.loading || data.phase == SubmitPhase.confirm) {
       platform.storage.saveLastDialog(null);
       return;
     }
@@ -1580,13 +1783,14 @@ class AppController extends ChangeNotifier {
     final raw = platform.storage.loadLastDialog();
     if (raw == null) return;
     final data = DialogData.fromJson(raw);
-    if (data.phase == SubmitPhase.loading || data.title.isEmpty) return;
+    if (data.phase == SubmitPhase.loading || data.phase == SubmitPhase.confirm || data.title.isEmpty) return;
     lastDialog = data;
     _emit();
   }
 
   void clearDialog() {
     lastDialog = null;
+    pendingConfirmPrepared = null;
     _persistDialog(null);
     notifications?.cancelAll();
     if (!submitJob.active) {
@@ -1601,21 +1805,39 @@ class AppController extends ChangeNotifier {
     final isEach = kind == 'each';
     final isManual = source == 'manual';
     final isCharge = source == 'charge';
-    final rows = isCharge
-        ? chargeRows()
-        : isManual
-            ? manualRows()
-            : currentRows(isEach ? 'each' : 'batch');
-    final emptyMessage = isCharge
-        ? 'أكمل الاسم والمبلغ والمدين والدائن لسند واحد على الأقل.'
-        : isManual
-            ? 'أكمل الاسم والمبلغ والدائن لسند واحد على الأقل.'
-            : 'الصق بيانات صالحة: الاسم | المبلغ | الدائن.';
+    final isProfit = source == 'profit';
+    final rows = isProfit
+        ? profitRows()
+        : isCharge
+            ? chargeRows()
+            : isManual
+                ? manualRows()
+                : currentRows(isEach ? 'each' : 'batch');
+    final emptyMessage = isProfit
+        ? (profitMode == 'each'
+            ? 'أكمل حساب ومبلغ الدائن والمدين لسند واحد على الأقل.'
+            : 'الصق بيانات صالحة: الدائن | مبلغ الدائن | المدين | مبلغ المدين.')
+        : isCharge
+            ? 'أكمل الاسم والمبلغ والمدين والدائن لسند واحد على الأقل.'
+            : isManual
+                ? 'أكمل الاسم والمبلغ والدائن لسند واحد على الأقل.'
+                : 'الصق بيانات صالحة: الاسم | المبلغ | الدائن.';
     if (rows.isEmpty) {
       showSubmitError('بيانات ناقصة', emptyMessage, '', forSubmit);
       return null;
     }
-    if (!isCharge && debitAccount.trim().isEmpty) {
+    if (isProfit) {
+      final totalsMap = profitPasteTotals(currentProfitPaste());
+      if ((totalsMap['diff'] ?? 0).abs() > 0.001 && profitAccount.trim().isEmpty) {
+        showSubmitError(
+          'حساب الربح',
+          'يوجد فرق بين الدائن والمدين. اختر حساب الربح لتسوية الفرق قبل الإنشاء.',
+          '',
+          forSubmit,
+        );
+        return null;
+      }
+    } else if (!isCharge && debitAccount.trim().isEmpty) {
       showSubmitError('حساب المدين', 'اختر حساب المدين من دليل الحسابات.', '', forSubmit);
       return null;
     }
@@ -1627,7 +1849,9 @@ class AppController extends ChangeNotifier {
     _emit();
     try {
       final resolved = await resolveRows(rows);
-      if (isCharge) {
+      if (isProfit) {
+        resolvedProfit = resolved;
+      } else if (isCharge) {
         resolvedCharge = resolved;
       } else if (isManual) {
         resolvedManual = resolved;
@@ -1636,7 +1860,11 @@ class AppController extends ChangeNotifier {
       } else {
         resolvedBatch = resolved;
       }
-      final section = isCharge ? 'charge' : (isManual ? 'manual' : (isEach ? 'each' : 'batch'));
+      final section = isProfit
+          ? 'profit'
+          : isCharge
+              ? 'charge'
+              : (isManual ? 'manual' : (isEach ? 'each' : 'batch'));
       _emit();
       return PreparedJournal(rows: rows, resolved: resolved, section: section, source: source ?? section);
     } catch (err) {
@@ -1652,6 +1880,7 @@ class AppController extends ChangeNotifier {
   Future<void> previewEach() => previewAndResolve('each');
   Future<void> previewManual() => previewAndResolve('each', source: 'manual');
   Future<void> previewCharge() => previewAndResolve('each', source: 'charge');
+  Future<void> previewProfit() => previewAndResolve('each', source: 'profit');
 
   Future<void> runJournalSubmit(
     String mode,
@@ -1718,6 +1947,235 @@ class AppController extends ChangeNotifier {
       () => previewAndResolve('each', forSubmit: true, source: 'charge'),
       'يتم الآن تسجيل سندات الشحن في وكيد. يرجى الانتظار.',
     );
+  }
+
+  String profitConfirmSummary(List<ProfitPasteRow> paste) {
+    final t = profitPasteTotals(paste);
+    final debit = t['debit'] ?? 0;
+    final credit = t['credit'] ?? 0;
+    final diff = t['diff'] ?? 0;
+    final count = (t['count'] ?? 0).toInt();
+    final side = diff.abs() <= 0.001
+        ? 'لا يوجد فرق — القيد متوازن.'
+        : (diff > 0
+            ? 'الفرق ${formatProfitAmount(diff)} — سيُسجَّل مديناً على حساب الربح.'
+            : 'الفرق ${formatProfitAmount(-diff)} — سيُسجَّل دائناً على حساب الربح.');
+    final lines = <String>[
+      'عدد السندات: $count',
+      'إجمالي الدائن: ${formatProfitAmount(credit)}',
+      'إجمالي المدين: ${formatProfitAmount(debit)}',
+      side,
+      if (diff.abs() > 0.001) 'حساب الربح: ${profitAccountLabel()}',
+    ];
+    if (paste.length <= 12) {
+      lines.add('');
+      for (var i = 0; i < paste.length; i++) {
+        final row = paste[i];
+        final c = num.tryParse(cleanAmount(row.creditAmount)) ?? 0;
+        final d = num.tryParse(cleanAmount(row.debitAmount)) ?? 0;
+        final rowDiff = c - d;
+        lines.add(
+          '${i + 1}) الدائن ${row.credit} مبلغ ${formatProfitAmount(c)} — المدين ${row.debit} مبلغ ${formatProfitAmount(d)} — الفرق ${formatProfitAmount(rowDiff.abs())}',
+        );
+      }
+    }
+    return lines.join('\n');
+  }
+
+  Future<void> submitProfit() async {
+    if (!guardSubmitJob()) return;
+    final prepared = await previewAndResolve('each', forSubmit: false, source: 'profit');
+    if (prepared == null) return;
+    pendingConfirmPrepared = prepared;
+    lastDialog = DialogData(
+      phase: SubmitPhase.confirm,
+      title: 'تأكيد سند ربحي',
+      message: profitMode == 'each' ? 'راجع الفرق ثم أكّد إنشاء سند منفصل لكل بطاقة.' : 'راجع الفرق ثم أكّد إنشاء السند الجماعي.',
+      details: profitConfirmSummary(currentProfitPaste()),
+    );
+    _emit();
+  }
+
+  Future<void> confirmPendingSubmit() async {
+    final prepared = pendingConfirmPrepared;
+    if (prepared == null || lastDialog?.phase != SubmitPhase.confirm) {
+      clearDialog();
+      return;
+    }
+    pendingConfirmPrepared = null;
+    lastDialog = null;
+    _persistDialog(null);
+    if (!guardSubmitJob()) return;
+    beginSubmitJob();
+    lastDialog = DialogData(
+      phase: SubmitPhase.loading,
+      title: 'جارٍ الإنشاء...',
+      message: profitMode == 'each'
+          ? 'يتم الآن تسجيل سند ربحي منفصل لكل بطاقة. يرجى الانتظار.'
+          : 'يتم الآن تسجيل السند الربحي الجماعي في وكيد. يرجى الانتظار.',
+    );
+    _emit();
+    try {
+      await WakelockPlus.enable();
+    } catch (_) {}
+    await notifications?.showProgress('وكيد — جارٍ التسجيل', lastDialog?.message ?? '');
+    try {
+      await executeProfitSubmit(prepared);
+    } catch (err) {
+      showSubmitError('فشل الإنشاء', err.toString(), '', true);
+    } finally {
+      try {
+        await WakelockPlus.disable();
+      } catch (_) {}
+      finishSubmitJob();
+    }
+  }
+
+  void cancelPendingSubmit() {
+    pendingConfirmPrepared = null;
+    lastDialog = null;
+    _persistDialog(null);
+    _emit();
+  }
+
+  Future<void> executeProfitSubmit(PreparedJournal prepared) async {
+    final date = entryDate;
+    final remittanceGroups = profitLedgerGroups(List<JournalRow>.from(prepared.rows));
+    if (remittanceGroups.isEmpty) {
+      showSubmitError('بيانات ناقصة', 'لا توجد أسطر مدين/دائن صالحة.', '', true);
+      return;
+    }
+    final split = pendingCustomerGroups(remittanceGroups, date);
+    final pending = split['pending']!;
+    final skipped = split['skipped']!;
+    if (pending.isEmpty) {
+      showSubmitSuccess(
+        'موجود في السجل',
+        'كل السندات (${remittanceGroups.length}) مسجّلة مسبقاً في السجل لهذا التاريخ.',
+        skipped.map((g) => g.name).join('\n'),
+        true,
+      );
+      clearProfitForm();
+      return;
+    }
+    final skipNote = skipped.isNotEmpty ? '\n(${skipped.length} سنداً موجود مسبقاً في السجل — تم تخطيهم)' : '';
+    final paste = [
+      for (final group in pending)
+        ProfitPasteRow(
+          name: group.name,
+          credit: group.rows.firstWhere((r) => r.credit.isNotEmpty, orElse: () => group.rows.last).account,
+          creditAmount: group.rows.firstWhere((r) => r.credit.isNotEmpty, orElse: () => group.rows.last).credit,
+          debit: group.rows.firstWhere((r) => r.debit.isNotEmpty, orElse: () => group.rows.first).account,
+          debitAmount: group.rows.firstWhere((r) => r.debit.isNotEmpty, orElse: () => group.rows.first).debit,
+          note: groupClientNote(group),
+        ),
+    ];
+    final rebuilt = buildProfitJournalRows(
+      paste,
+      profitAccount: profitAccount,
+      perVoucherBalance: profitMode == 'each',
+    );
+    var resolved = Map<String, dynamic>.from(prepared.resolved);
+    final missing = rebuilt
+        .map((r) => normalizeAccountKey(r.account))
+        .where((k) => k.isNotEmpty && !resolved.containsKey(k))
+        .toSet();
+    if (missing.isNotEmpty) {
+      resolved = {...resolved, ...await resolveRows(rebuilt.where((r) => missing.contains(normalizeAccountKey(r.account))).toList())};
+    }
+
+    if (profitMode != 'each') {
+      final body = buildJournal(
+        rebuilt,
+        resolved,
+        section: 'profit',
+        notes: notesProfit.trim().isNotEmpty ? notesProfit.trim() : 'سند ربحي',
+      );
+      var created = await enrichCreated(await postJournalWithRetry(body));
+      if (pickJournalNumber(created).isEmpty) {
+        try {
+          created = await enrichCreated(await _api('GET', '/api/JournalEntry/GetLast'));
+        } catch (_) {}
+      }
+      final number = pickJournalNumber(created);
+      final id = pickId(created);
+      appendLedgerEntries(
+        kind: 'profit',
+        groups: pending,
+        resolved: resolved,
+        created: created,
+        extra: sectionNote('profit'),
+        date: date,
+        section: 'profit',
+      );
+      final details = [
+        if (number.isNotEmpty) 'رقم السند في وكيد: $number',
+        if (pending.isNotEmpty) 'عدد الأسماء في السند: ${pending.length}',
+        if (id.isNotEmpty) 'المعرف: $id',
+        skipNote.trim(),
+        'تمت إضافة السجل — راجع تبويب «السجل».',
+      ].where((s) => s.toString().isNotEmpty).join('\n');
+      showSubmitSuccess('تم التسجيل بنجاح', 'تم حفظ السند الربحي الجماعي في وكيد.$skipNote', details, true);
+      clearProfitForm();
+      return;
+    }
+
+    final groups = groupRowsByKey(rebuilt).where((g) => g.rows.any((r) => !r.balancing) || g.rows.isNotEmpty).toList();
+    final ok = <Map<String, String>>[];
+    final failed = <Map<String, String>>[];
+    var done = 0;
+    final total = groups.length;
+    await mapPool(groups, journalParallel, (group, _) async {
+      final notes = groupStatement(group, 'profit').isNotEmpty ? groupStatement(group, 'profit') : 'سند ربحي';
+      try {
+        final body = buildJournal(group.rows, resolved, notes: notes, section: 'profit');
+        final created = await enrichCreated(await postJournalWithRetry(body));
+        final number = pickJournalNumber(created);
+        appendLedgerEntries(
+          kind: 'profit',
+          groups: [
+            CustomerGroup(name: group.name, rows: group.rows.where((r) => !r.balancing).toList()),
+          ],
+          resolved: resolved,
+          created: created,
+          extra: groupClientNote(group),
+          date: date,
+          section: 'profit',
+        );
+        ok.add({'name': group.name, 'number': number});
+      } catch (err) {
+        failed.add({'name': group.name, 'msg': friendlyError(err)});
+      } finally {
+        done += 1;
+        lastDialog = DialogData(
+          phase: SubmitPhase.loading,
+          title: 'جارٍ الإنشاء...',
+          message: 'تم $done من $total سنداً.\nمسجّل في السجل: ${ok.length}$skipNote',
+        );
+        _emit();
+      }
+    });
+    if (failed.isEmpty) {
+      final lines = ok.map((item) => item['number']!.isNotEmpty ? '${item['name']} — رقم ${item['number']}' : item['name']!);
+      showSubmitSuccess(
+        'تم التسجيل بنجاح',
+        'تم حفظ ${ok.length} سنداً ربحياً في وكيد.$skipNote',
+        '${lines.join('\n')}\nكل سند حُفظ في السجل فور نجاحه — راجع تبويب «السجل».',
+        true,
+      );
+      clearProfitForm();
+    } else {
+      final lines = [
+        ...ok.map((item) => '✓ ${item['name']}${item['number']!.isNotEmpty ? ' — رقم ${item['number']}' : ''} (في السجل)'),
+        ...failed.map((f) => '✗ ${f['name']}: ${f['msg']}'),
+      ];
+      showSubmitSuccess(
+        'اكتمل جزئياً',
+        'نجح ${ok.length} سنداً (محفوظ في السجل) وفشل ${failed.length}.$skipNote\nأعد الإنشاء لإكمال المتبقي — المنجز موجود في السجل.',
+        lines.join('\n'),
+        true,
+      );
+    }
   }
 
   Future<void> executeBatchJournalSubmit(PreparedJournal prepared) async {

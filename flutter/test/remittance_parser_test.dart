@@ -75,4 +75,75 @@ void main() {
   test('sheetTemplate is tab-separated arabic header', () {
     expect(sheetTemplate.split('\n').first, 'الاسم\tالمبلغ\tالدائن');
   });
+
+  group('parseProfitTable', () {
+    test('parses four columns credit amount debit amount', () {
+      const text = '9830\t1500\t555\t1200\n1200\t2000\t555\t1800';
+      final rows = parseProfitTable(text);
+      expect(rows.length, 2);
+      expect(rows[0].credit, '9830');
+      expect(rows[0].creditAmount, '1500');
+      expect(rows[0].debit, '555');
+      expect(rows[0].debitAmount, '1200');
+    });
+
+    test('parses five columns with name', () {
+      const text = 'احمد\t9830\t1500\t555\t1200';
+      final rows = parseProfitTable(text);
+      expect(rows.length, 1);
+      expect(rows[0].name, 'احمد');
+      expect(rows[0].credit, '9830');
+      expect(rows[0].debit, '555');
+    });
+
+    test('skips header row', () {
+      final rows = parseProfitTable(profitSheetTemplate);
+      expect(rows.length, 2);
+      expect(rows[0].credit, '9830');
+    });
+  });
+
+  group('buildProfitJournalRows', () {
+    test('adds debit balancing line when credit is larger', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '1500', debit: '555', debitAmount: '1200'),
+        ],
+        profitAccount: '4000',
+        perVoucherBalance: true,
+      );
+      expect(rows.length, 3);
+      expect(rows[0].debit, '1200');
+      expect(rows[1].credit, '1500');
+      expect(rows[2].balancing, true);
+      expect(rows[2].account, '4000');
+      expect(rows[2].debit, '300');
+      expect(rows[2].credit, '');
+    });
+
+    test('batch uses one net balancing line', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '1500', debit: '555', debitAmount: '1200'),
+          ProfitPasteRow(name: 'ب', credit: '1200', creditAmount: '2000', debit: '555', debitAmount: '1800'),
+        ],
+        profitAccount: '4000',
+      );
+      expect(profitLedgerGroups(rows).length, 2);
+      final balance = rows.where((r) => r.balancing).toList();
+      expect(balance.length, 1);
+      expect(balance.first.debit, '500');
+    });
+
+    test('equal amounts have no balancing line', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '100', debit: '555', debitAmount: '100'),
+        ],
+        profitAccount: '4000',
+      );
+      expect(rows.length, 2);
+      expect(rows.any((r) => r.balancing), false);
+    });
+  });
 }
