@@ -13,8 +13,62 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
   <title>وكيد — سند حوالة</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0b0f14;
+      color: #e8edf4;
+    }
+    .boot {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: #0b0f14;
+      font-family: Tahoma, "Segoe UI", system-ui, sans-serif;
+    }
+    .boot .mark {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: rgba(20, 184, 166, 0.16);
+      border: 1px solid rgba(20, 184, 166, 0.45);
+      color: #14b8a6;
+      font-size: 24px;
+      font-weight: 800;
+    }
+    .boot p { margin: 0; color: #8b9cb3; font-size: 14px; }
+    .boot .spin {
+      width: 22px;
+      height: 22px;
+      border: 2px solid #263244;
+      border-top-color: #14b8a6;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    flutter-view, flt-glass-pane { background: #0b0f14 !important; }
+  </style>
 </head>
 <body>
+  <div id="boot" class="boot">
+    <div class="mark">و</div>
+    <p>جارٍ التحميل...</p>
+    <div class="spin"></div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('boot');
+      if (el) el.remove();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
