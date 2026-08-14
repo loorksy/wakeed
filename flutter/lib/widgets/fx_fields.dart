@@ -4,41 +4,6 @@ import '../core/remittance_parser.dart';
 import '../theme/app_theme.dart';
 import 'common.dart';
 
-class FxRateField extends StatelessWidget {
-  const FxRateField({
-    super.key,
-    required this.controller,
-    required this.onChanged,
-    this.debit = false,
-    this.code = '',
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final bool debit;
-  final String code;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = debit ? WakeedColors.err : WakeedColors.green;
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: TextStyle(fontSize: 12, height: 1.2, color: color),
-      decoration: partyFieldDecoration(
-        debit: debit,
-        base: const InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        ),
-        hintText: 'مثال 47.77',
-        labelText: code.isEmpty ? '1 دولار =' : '1 دولار = ($code)',
-      ),
-      onChanged: onChanged,
-    );
-  }
-}
-
 class FxAmountField extends StatelessWidget {
   const FxAmountField({
     super.key,
@@ -120,7 +85,7 @@ class JournalFxSummary extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'المبالغ بعملة كل حساب — الفرق بالدولار حسب التسعيرة',
+            'المبالغ بعملة كل حساب — الفرق حسب تسعيرة وكيد',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ] else

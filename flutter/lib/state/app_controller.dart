@@ -64,6 +64,7 @@ class AppController extends ChangeNotifier {
   List<Map<String, dynamic>> costCenters = [];
   dynamic currency;
   List<dynamic> currencies = [];
+  final Map<String, num> _liveHawalaByCurrencyId = {};
   dynamic sampleDetail;
   dynamic sampleEntry;
   List<dynamic> accounts = [];
@@ -442,7 +443,7 @@ class AppController extends ChangeNotifier {
       'ownerKey': ownerKey,
       'username': username,
       'debitAccount': debitAccount,
-      'debitHawalaRate': debitHawalaRate,
+      'debitHawalaRate': '',
       'debitDefaults': debitDefaults,
       'notes': notesBatch,
       'notesEach': notesEach,
@@ -488,7 +489,7 @@ class AppController extends ChangeNotifier {
         debitDefaults = (settings['debitDefaults'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
       }
       if (settings['debitAccount'] != null) pendingDebitCode = settings['debitAccount'].toString();
-      if (settings['debitHawalaRate'] != null) debitHawalaRate = settings['debitHawalaRate'].toString();
+      debitHawalaRate = '';
       if (settings['notes'] != null) notesBatch = settings['notes'].toString();
       if (settings['notesEach'] != null) notesEach = settings['notesEach'].toString();
       if (settings['userDisplayName'] != null) {
@@ -503,18 +504,30 @@ class AppController extends ChangeNotifier {
             .whereType<Map>()
             .map((e) => ManualEntry.fromJson(Map<String, dynamic>.from(e)))
             .toList();
+        for (final entry in manualEntries) {
+          entry.debitRate = '';
+          entry.creditRate = '';
+        }
       }
       if (settings['chargeEntries'] is List && (settings['chargeEntries'] as List).isNotEmpty) {
         chargeEntries = (settings['chargeEntries'] as List)
             .whereType<Map>()
             .map((e) => ManualEntry.fromJson(Map<String, dynamic>.from(e)))
             .toList();
+        for (final entry in chargeEntries) {
+          entry.debitRate = '';
+          entry.creditRate = '';
+        }
       }
       if (settings['profitEntries'] is List && (settings['profitEntries'] as List).isNotEmpty) {
         profitEntries = (settings['profitEntries'] as List)
             .whereType<Map>()
             .map((e) => ProfitEntry.fromJson(Map<String, dynamic>.from(e)))
             .toList();
+        for (final entry in profitEntries) {
+          entry.debitRate = '';
+          entry.creditRate = '';
+        }
       }
       if (settings['notesProfit'] != null) notesProfit = settings['notesProfit'].toString();
       if (settings['tableProfit'] != null) tableProfit = settings['tableProfit'].toString();
@@ -577,6 +590,7 @@ class AppController extends ChangeNotifier {
           currencies = asList(await _api('GET', '/api/Currency/GetAll'));
         } catch (_) {}
       }
+      _ingestLiveCurrencyRates(sampleEntry);
 
       journalTypes = types is List ? types : [];
       costCenters = flattenCostCenters(centers is List ? centers : []);
@@ -596,6 +610,7 @@ class AppController extends ChangeNotifier {
         }
         fillDebitAccounts();
       }
+      await _fillMissingCurrencies();
 
       if (journalTypes.isNotEmpty) {
         final remit = journalTypes.where(isRemittanceType).toList();
@@ -723,9 +738,6 @@ class AppController extends ChangeNotifier {
       );
       debitAccount = pickAccountCode(fallback);
     }
-    if (debitHawalaRate.trim().isEmpty) {
-      debitHawalaRate = defaultHawalaRateFor(debitAccount);
-    }
     _emit();
   }
 
@@ -852,7 +864,13 @@ class AppController extends ChangeNotifier {
         code.isNotEmpty && base.code.isNotEmpty && code.toUpperCase() == base.code.toUpperCase();
     final isBase = sameId || sameCode || (curId.isEmpty && code.isEmpty);
     final apiRate = pickCurrencyRate(cur);
-    final hawala = hawalaRateFromApi(apiRate, isBase: isBase);
+    var hawala = hawalaRateFromApi(apiRate, isBase: isBase);
+    if (!isBase) {
+      final live = _liveHawalaByCurrencyId[curId];
+      if (live != null && live > 1.0001 && ((hawala - 1).abs() < 0.0001 || hawala <= 0)) {
+        hawala = live;
+      }
+    }
     final resolvedCode = code.isNotEmpty ? code : (isBase ? base.code : '');
     return CurrencyQuote(
       id: curId,
@@ -869,6 +887,40 @@ class AppController extends ChangeNotifier {
     return currencyQuoteOf(_accountByCode(key));
   }
 
+  void _ingestLiveCurrencyRates(dynamic entry) {
+    if (entry is! Map) return;
+    final details = asList(entry['JournalEntryDetails'] ?? entry['journalEntryDetails']);
+    for (final d in details) {
+      if (d is! Map) continue;
+      final id = (d['currencyID'] ??
+              d['CurrencyID'] ??
+              d['currencyId'] ??
+              d['CurrencyId'] ??
+              '')
+          .toString()
+          .trim();
+      final raw = d['Equality'] ?? d['equality'] ?? d['rate'] ?? d['Rate'];
+      final n = numOf(raw);
+      if (id.isEmpty || n == 0) continue;
+      final hawala = hawalaRateFromApi(n);
+      if (hawala > 1.0001) _liveHawalaByCurrencyId[id] = hawala;
+    }
+  }
+
+  Future<void> _fillMissingCurrencies() async {
+    final ids = <String>{};
+    for (final acc in accounts) {
+      final id = pickAccountCurrencyId(acc);
+      if (id.isNotEmpty && _currencyById(id) == null) ids.add(id);
+    }
+    for (final id in ids.take(12)) {
+      try {
+        final cur = await _api('GET', '/api/Currency/$id');
+        if (cur is Map && pickId(cur).isNotEmpty) currencies.add(Map<String, dynamic>.from(cur));
+      } catch (_) {}
+    }
+  }
+
   String defaultHawalaRateFor(String accountCode) {
     final quote = currencyQuoteForAccount(accountCode);
     if (quote.isBase) return '';
@@ -879,13 +931,12 @@ class AppController extends ChangeNotifier {
     final i = profitEntries.indexWhere((e) => e.id == entryId);
     if (i < 0) return;
     final entry = profitEntries[i];
-    final rate = defaultHawalaRateFor(code);
     if (debit) {
       entry.debit = code;
-      entry.debitRate = rate;
+      entry.debitRate = '';
     } else {
       entry.credit = code;
-      entry.creditRate = rate;
+      entry.creditRate = '';
     }
     updateProfitEntry(entry);
   }
@@ -903,30 +954,13 @@ class AppController extends ChangeNotifier {
     if (value.isEmpty) return;
     debitAccount = value;
     pendingDebitCode = value;
-    debitHawalaRate = defaultHawalaRateFor(value);
+    debitHawalaRate = '';
     saveLocal();
     _emit();
   }
 
-  void setDebitHawalaRate(String value) {
-    debitHawalaRate = value;
-    scheduleSaveLocal();
-    _emit();
-  }
-
-  String rateOverrideForAccount(String code) {
-    if (normalizeAccountKey(code) == normalizeAccountKey(debitAccount) && debitHawalaRate.trim().isNotEmpty) {
-      return debitHawalaRate;
-    }
-    return '';
-  }
-
   List<JournalRow> withAccountFx(List<JournalRow> rows) {
-    return applyRemittanceFx(
-      rows,
-      currencyQuoteForAccount,
-      rateOf: rateOverrideForAccount,
-    );
+    return applyRemittanceFx(rows, currencyQuoteForAccount);
   }
 
   void saveDebitDefault() {
@@ -1168,7 +1202,6 @@ class AppController extends ChangeNotifier {
         debit: amt,
         credit: '',
         clientNote: clientNote,
-        rate: entry.debitRate,
       ));
       rows.add(JournalRow(
         account: credit,
@@ -1176,7 +1209,6 @@ class AppController extends ChangeNotifier {
         debit: '',
         credit: amt,
         clientNote: clientNote,
-        rate: entry.creditRate,
       ));
     }
     return withAccountFx(rows);
@@ -1250,8 +1282,6 @@ class AppController extends ChangeNotifier {
         debit: entry.debit,
         debitAmount: entry.debitAmount,
         note: entry.note,
-        debitRate: entry.debitRate,
-        creditRate: entry.creditRate,
       ),
     );
   }
@@ -1260,12 +1290,8 @@ class AppController extends ChangeNotifier {
     final debitQ = currencyQuoteForAccount(row.debit);
     final creditQ = currencyQuoteForAccount(row.credit);
     final base = baseCurrencyQuote();
-    final debitRate = row.debitRate.trim().isNotEmpty
-        ? row.debitRate
-        : (debitQ.isBase ? '' : formatHawalaRate(debitQ.hawalaRate));
-    final creditRate = row.creditRate.trim().isNotEmpty
-        ? row.creditRate
-        : (creditQ.isBase ? '' : formatHawalaRate(creditQ.hawalaRate));
+    final debitRate = debitQ.isBase ? '' : formatHawalaRate(debitQ.hawalaRate);
+    final creditRate = creditQ.isBase ? '' : formatHawalaRate(creditQ.hawalaRate);
     return ProfitPasteRow(
       name: row.name,
       credit: row.credit,
@@ -1304,8 +1330,6 @@ class AppController extends ChangeNotifier {
         debit: debitRow.account,
         debitAmount: debitRow.debit,
         note: groupClientNote(group),
-        debitRate: debitRow.rate,
-        creditRate: creditRow.rate,
         debitCurrencyId: debitRow.currencyId,
         creditCurrencyId: creditRow.currencyId,
         debitCurrencyCode: debitRow.currencyCode,
@@ -1363,7 +1387,6 @@ class AppController extends ChangeNotifier {
         debit: amt,
         credit: '',
         clientNote: clientNote,
-        rate: entry.debitRate,
       ));
       rows.add(JournalRow(
         account: credit,
@@ -1371,7 +1394,6 @@ class AppController extends ChangeNotifier {
         debit: '',
         credit: amt,
         clientNote: clientNote,
-        rate: entry.creditRate,
       ));
     }
     return withAccountFx(rows);
@@ -1382,7 +1404,7 @@ class AppController extends ChangeNotifier {
     if (i < 0) return;
     final entry = manualEntries[i];
     entry.credit = code;
-    entry.creditRate = defaultHawalaRateFor(code);
+    entry.creditRate = '';
     updateManualEntry(entry);
   }
 
@@ -1390,13 +1412,12 @@ class AppController extends ChangeNotifier {
     final i = chargeEntries.indexWhere((e) => e.id == entryId);
     if (i < 0) return;
     final entry = chargeEntries[i];
-    final rate = defaultHawalaRateFor(code);
     if (debit) {
       entry.debit = code;
-      entry.debitRate = rate;
+      entry.debitRate = '';
     } else {
       entry.credit = code;
-      entry.creditRate = rate;
+      entry.creditRate = '';
     }
     updateChargeEntry(entry);
   }

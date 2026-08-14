@@ -483,7 +483,6 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   late final TextEditingController nameCtrl;
   late final TextEditingController amountCtrl;
   late final TextEditingController creditCtrl;
-  late final TextEditingController creditRateCtrl;
   late final TextEditingController noteCtrl;
 
   @override
@@ -492,7 +491,6 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     nameCtrl = TextEditingController(text: widget.entry.name);
     amountCtrl = TextEditingController(text: widget.entry.amount);
     creditCtrl = TextEditingController(text: widget.entry.credit);
-    creditRateCtrl = TextEditingController(text: widget.entry.creditRate);
     noteCtrl = TextEditingController(text: widget.entry.note);
   }
 
@@ -500,7 +498,6 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
   void didUpdateWidget(covariant _ManualEntryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
-    if (creditRateCtrl.text != widget.entry.creditRate) creditRateCtrl.text = widget.entry.creditRate;
     if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
     if (amountCtrl.text != widget.entry.amount && widget.entry.amount.isEmpty) amountCtrl.clear();
     if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
@@ -511,24 +508,18 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     nameCtrl.dispose();
     amountCtrl.dispose();
     creditCtrl.dispose();
-    creditRateCtrl.dispose();
     noteCtrl.dispose();
     super.dispose();
   }
 
-  void _sync({bool accountChanged = false}) {
-    final app = context.read<AppController>();
-    if (accountChanged) {
-      final quote = app.currencyQuoteForAccount(creditCtrl.text);
-      creditRateCtrl.text = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
-    }
+  void _sync() {
     widget.entry
       ..name = nameCtrl.text
       ..amount = amountCtrl.text
       ..credit = creditCtrl.text
-      ..creditRate = creditRateCtrl.text
+      ..creditRate = ''
       ..note = noteCtrl.text;
-    app.updateManualEntry(widget.entry);
+    context.read<AppController>().updateManualEntry(widget.entry);
   }
 
   @override
@@ -537,12 +528,8 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
     final debitQ = app.currencyQuoteForAccount(app.debitAccount);
     final amt = num.tryParse(cleanAmount(amountCtrl.text)) ?? 0;
-    final cRate = parseHawalaRate(
-      creditRateCtrl.text.isNotEmpty ? creditRateCtrl.text : app.defaultHawalaRateFor(creditCtrl.text),
-    );
-    final dRate = parseHawalaRate(
-      app.debitHawalaRate.isNotEmpty ? app.debitHawalaRate : app.defaultHawalaRateFor(app.debitAccount),
-    );
+    final cRate = creditQ.isBase ? 1 : creditQ.hawalaRate;
+    final dRate = debitQ.isBase ? 1 : debitQ.hawalaRate;
     final creditBase = amountToBase(amt, cRate);
     final debitBase = amountToBase(amountFromBase(creditBase, dRate), dRate);
     final mixed = !creditQ.isBase || !debitQ.isBase;
@@ -588,7 +575,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
                 child: AccountNameField(
                   controller: creditCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: () => _sync(accountChanged: true),
+                  onChanged: _sync,
                 ),
               ),
               IconButton(
@@ -598,14 +585,6 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
               ),
             ],
           ),
-          if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            FxRateField(
-              controller: creditRateCtrl,
-              code: creditQ.code,
-              onChanged: (_) => _sync(),
-            ),
-          ],
           if (mixed && amt > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(
@@ -725,9 +704,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
   late final TextEditingController nameCtrl;
   late final TextEditingController amountCtrl;
   late final TextEditingController debitCtrl;
-  late final TextEditingController debitRateCtrl;
   late final TextEditingController creditCtrl;
-  late final TextEditingController creditRateCtrl;
   late final TextEditingController noteCtrl;
 
   @override
@@ -736,9 +713,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     nameCtrl = TextEditingController(text: widget.entry.name);
     amountCtrl = TextEditingController(text: widget.entry.amount);
     debitCtrl = TextEditingController(text: widget.entry.debit);
-    debitRateCtrl = TextEditingController(text: widget.entry.debitRate);
     creditCtrl = TextEditingController(text: widget.entry.credit);
-    creditRateCtrl = TextEditingController(text: widget.entry.creditRate);
     noteCtrl = TextEditingController(text: widget.entry.note);
   }
 
@@ -747,8 +722,6 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     super.didUpdateWidget(oldWidget);
     if (debitCtrl.text != widget.entry.debit) debitCtrl.text = widget.entry.debit;
     if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
-    if (debitRateCtrl.text != widget.entry.debitRate) debitRateCtrl.text = widget.entry.debitRate;
-    if (creditRateCtrl.text != widget.entry.creditRate) creditRateCtrl.text = widget.entry.creditRate;
     if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
     if (amountCtrl.text != widget.entry.amount && widget.entry.amount.isEmpty) amountCtrl.clear();
     if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
@@ -759,32 +732,21 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     nameCtrl.dispose();
     amountCtrl.dispose();
     debitCtrl.dispose();
-    debitRateCtrl.dispose();
     creditCtrl.dispose();
-    creditRateCtrl.dispose();
     noteCtrl.dispose();
     super.dispose();
   }
 
-  void _sync({bool debitChanged = false, bool creditChanged = false}) {
-    final app = context.read<AppController>();
-    if (debitChanged) {
-      final quote = app.currencyQuoteForAccount(debitCtrl.text);
-      debitRateCtrl.text = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
-    }
-    if (creditChanged) {
-      final quote = app.currencyQuoteForAccount(creditCtrl.text);
-      creditRateCtrl.text = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
-    }
+  void _sync() {
     widget.entry
       ..name = nameCtrl.text
       ..amount = amountCtrl.text
       ..debit = debitCtrl.text
-      ..debitRate = debitRateCtrl.text
+      ..debitRate = ''
       ..credit = creditCtrl.text
-      ..creditRate = creditRateCtrl.text
+      ..creditRate = ''
       ..note = noteCtrl.text;
-    app.updateChargeEntry(widget.entry);
+    context.read<AppController>().updateChargeEntry(widget.entry);
   }
 
   @override
@@ -793,12 +755,8 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
     final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
     final amt = num.tryParse(cleanAmount(amountCtrl.text)) ?? 0;
-    final cRate = parseHawalaRate(
-      creditRateCtrl.text.isNotEmpty ? creditRateCtrl.text : app.defaultHawalaRateFor(creditCtrl.text),
-    );
-    final dRate = parseHawalaRate(
-      debitRateCtrl.text.isNotEmpty ? debitRateCtrl.text : app.defaultHawalaRateFor(debitCtrl.text),
-    );
+    final cRate = creditQ.isBase ? 1 : creditQ.hawalaRate;
+    final dRate = debitQ.isBase ? 1 : debitQ.hawalaRate;
     final creditBase = amountToBase(amt, cRate);
     final debitBase = amountToBase(amountFromBase(creditBase, dRate), dRate);
     final mixed = !creditQ.isBase || !debitQ.isBase;
@@ -842,7 +800,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
                 child: AccountNameField(
                   controller: debitCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: () => _sync(debitChanged: true),
+                  onChanged: _sync,
                   debit: true,
                 ),
               ),
@@ -853,15 +811,6 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
             ],
           ),
-          if (!debitQ.isBase && debitCtrl.text.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            FxRateField(
-              controller: debitRateCtrl,
-              debit: true,
-              code: debitQ.code,
-              onChanged: (_) => _sync(),
-            ),
-          ],
           const SizedBox(height: 6),
           Row(
             children: [
@@ -869,7 +818,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
                 child: AccountNameField(
                   controller: creditCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: () => _sync(creditChanged: true),
+                  onChanged: _sync,
                 ),
               ),
               IconButton(
@@ -879,14 +828,6 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
             ],
           ),
-          if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            FxRateField(
-              controller: creditRateCtrl,
-              code: creditQ.code,
-              onChanged: (_) => _sync(),
-            ),
-          ],
           if (mixed && amt > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(
@@ -1051,7 +992,7 @@ class _ProfitTabState extends State<ProfitTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة.',
+              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. التصريف من تسعيرة وكيد.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -1112,7 +1053,7 @@ class _ProfitTabState extends State<ProfitTab> {
           if ((pt['fx'] ?? 0) > 0) ...[
             const SizedBox(height: 4),
             Text(
-              'الفرق بالدولار حسب تسعيرة الحساب',
+              'الفرق بالدولار حسب تسعيرة وكيد',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -1147,10 +1088,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
   late final TextEditingController nameCtrl;
   late final TextEditingController creditCtrl;
   late final TextEditingController creditAmtCtrl;
-  late final TextEditingController creditRateCtrl;
   late final TextEditingController debitCtrl;
   late final TextEditingController debitAmtCtrl;
-  late final TextEditingController debitRateCtrl;
   late final TextEditingController noteCtrl;
 
   static const _dense = InputDecoration(
@@ -1166,10 +1105,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     nameCtrl = TextEditingController(text: widget.entry.name);
     creditCtrl = TextEditingController(text: widget.entry.credit);
     creditAmtCtrl = TextEditingController(text: widget.entry.creditAmount);
-    creditRateCtrl = TextEditingController(text: widget.entry.creditRate);
     debitCtrl = TextEditingController(text: widget.entry.debit);
     debitAmtCtrl = TextEditingController(text: widget.entry.debitAmount);
-    debitRateCtrl = TextEditingController(text: widget.entry.debitRate);
     noteCtrl = TextEditingController(text: widget.entry.note);
   }
 
@@ -1178,8 +1115,6 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     super.didUpdateWidget(oldWidget);
     if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
     if (debitCtrl.text != widget.entry.debit) debitCtrl.text = widget.entry.debit;
-    if (creditRateCtrl.text != widget.entry.creditRate) creditRateCtrl.text = widget.entry.creditRate;
-    if (debitRateCtrl.text != widget.entry.debitRate) debitRateCtrl.text = widget.entry.debitRate;
     if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
     if (creditAmtCtrl.text != widget.entry.creditAmount && widget.entry.creditAmount.isEmpty) {
       creditAmtCtrl.clear();
@@ -1191,68 +1126,27 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _fillMissingRates();
-    });
-  }
-
-  @override
   void dispose() {
     nameCtrl.dispose();
     creditCtrl.dispose();
     creditAmtCtrl.dispose();
-    creditRateCtrl.dispose();
     debitCtrl.dispose();
     debitAmtCtrl.dispose();
-    debitRateCtrl.dispose();
     noteCtrl.dispose();
     super.dispose();
   }
 
-  void _sync({bool creditAccountChanged = false, bool debitAccountChanged = false}) {
-    final app = context.read<AppController>();
-    if (creditAccountChanged) {
-      final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
-      creditRateCtrl.text = creditQ.isBase ? '' : formatHawalaRate(creditQ.hawalaRate);
-    }
-    if (debitAccountChanged) {
-      final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
-      debitRateCtrl.text = debitQ.isBase ? '' : formatHawalaRate(debitQ.hawalaRate);
-    }
+  void _sync() {
     widget.entry
       ..name = nameCtrl.text
       ..credit = creditCtrl.text
       ..creditAmount = creditAmtCtrl.text
-      ..creditRate = creditRateCtrl.text
+      ..creditRate = ''
       ..debit = debitCtrl.text
       ..debitAmount = debitAmtCtrl.text
-      ..debitRate = debitRateCtrl.text
+      ..debitRate = ''
       ..note = noteCtrl.text;
-    app.updateProfitEntry(widget.entry);
-  }
-
-  void _fillMissingRates() {
-    final app = context.read<AppController>();
-    var changed = false;
-    if (creditCtrl.text.trim().isNotEmpty && creditRateCtrl.text.isEmpty) {
-      final quote = app.currencyQuoteForAccount(creditCtrl.text);
-      if (!quote.isBase) {
-        creditRateCtrl.text = formatHawalaRate(quote.hawalaRate);
-        widget.entry.creditRate = creditRateCtrl.text;
-        changed = true;
-      }
-    }
-    if (debitCtrl.text.trim().isNotEmpty && debitRateCtrl.text.isEmpty) {
-      final quote = app.currencyQuoteForAccount(debitCtrl.text);
-      if (!quote.isBase) {
-        debitRateCtrl.text = formatHawalaRate(quote.hawalaRate);
-        widget.entry.debitRate = debitRateCtrl.text;
-        changed = true;
-      }
-    }
-    if (changed) app.updateProfitEntry(widget.entry);
+    context.read<AppController>().updateProfitEntry(widget.entry);
   }
 
   Widget _currencyBadge(String symbol, Color color) {
@@ -1287,29 +1181,6 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     );
   }
 
-  Widget _rateField({
-    required TextEditingController controller,
-    required bool debit,
-    required String code,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: TextStyle(
-        fontSize: 12,
-        height: 1.2,
-        color: debit ? WakeedColors.err : WakeedColors.green,
-      ),
-      decoration: partyFieldDecoration(
-        debit: debit,
-        base: _dense,
-        hintText: 'مثال 47.77',
-        labelText: code.isEmpty ? '1 دولار =' : '1 دولار = ($code)',
-      ),
-      onChanged: (_) => _sync(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
@@ -1317,8 +1188,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
     final c = num.tryParse(cleanAmount(creditAmtCtrl.text)) ?? 0;
     final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
-    final cRate = parseHawalaRate(creditRateCtrl.text);
-    final dRate = parseHawalaRate(debitRateCtrl.text);
+    final cRate = creditQ.isBase ? 1 : creditQ.hawalaRate;
+    final dRate = debitQ.isBase ? 1 : debitQ.hawalaRate;
     final creditBase = amountToBase(c, cRate);
     final debitBase = amountToBase(d, dRate);
     final profit = roundMoney(debitBase - creditBase);
@@ -1383,7 +1254,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: AccountNameField(
                   controller: creditCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: () => _sync(creditAccountChanged: true),
+                  onChanged: _sync,
                   dense: true,
                 ),
               ),
@@ -1399,18 +1270,14 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               ),
             ],
           ),
-          if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _rateField(controller: creditRateCtrl, debit: false, code: creditQ.code),
-            if (c > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '${formatProfitAmount(c)} ${creditQ.badge} ÷ ${formatHawalaRate(cRate)} = ${formatProfitAmount(creditBase)} $baseSymbol',
-                  style: const TextStyle(fontSize: 11, color: WakeedColors.green),
-                ),
+          if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty && c > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '${formatProfitAmount(c)} ${creditQ.badge} = ${formatProfitAmount(creditBase)} $baseSymbol',
+                style: const TextStyle(fontSize: 11, color: WakeedColors.green),
               ),
-          ],
+            ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1419,7 +1286,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: AccountNameField(
                   controller: debitCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: () => _sync(debitAccountChanged: true),
+                  onChanged: _sync,
                   dense: true,
                   debit: true,
                 ),
@@ -1436,18 +1303,14 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               ),
             ],
           ),
-          if (!debitQ.isBase && debitCtrl.text.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _rateField(controller: debitRateCtrl, debit: true, code: debitQ.code),
-            if (d > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '${formatProfitAmount(d)} ${debitQ.badge} ÷ ${formatHawalaRate(dRate)} = ${formatProfitAmount(debitBase)} $baseSymbol',
-                  style: const TextStyle(fontSize: 11, color: WakeedColors.err),
-                ),
+          if (!debitQ.isBase && debitCtrl.text.trim().isNotEmpty && d > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '${formatProfitAmount(d)} ${debitQ.badge} = ${formatProfitAmount(debitBase)} $baseSymbol',
+                style: const TextStyle(fontSize: 11, color: WakeedColors.err),
               ),
-          ],
+            ),
           if (c > 0 || d > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(

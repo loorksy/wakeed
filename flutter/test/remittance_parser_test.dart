@@ -178,6 +178,23 @@ void main() {
       expect(roundMoney(72 - 70.84), 1.16);
     });
 
+    test('catalog rate overwrites a saved 47.5 so profit is 1.16', () {
+      final row = JournalRow(
+        account: '1731',
+        description: 'راتب',
+        debit: '',
+        credit: '3384',
+        rate: '47.5',
+      );
+      attachRowCurrency(
+        row,
+        const CurrencyQuote(id: 'try', code: 'TRY', symbol: 'T', hawalaRate: 47.77, isBase: false),
+      );
+      expect(row.rate, '47.77');
+      expect(amountToBase(3384, parseHawalaRate(row.rate)), 70.84);
+      expect(roundMoney(72 - 70.84), 1.16);
+    });
+
     test('keeps hawala quote precision so 47.77 is not flattened to 47.5', () {
       expect(formatHawalaRate(47.77), '47.77');
       expect(formatHawalaRate(47.76962), '47.76962');

@@ -357,16 +357,10 @@ bool _isDebitLine(JournalRow row) => row.debit.trim().isNotEmpty && row.credit.t
 
 bool _isCreditLine(JournalRow row) => row.credit.trim().isNotEmpty && row.debit.trim().isEmpty;
 
-void attachRowCurrency(JournalRow row, CurrencyQuote quote, {String rateOverride = ''}) {
+void attachRowCurrency(JournalRow row, CurrencyQuote quote) {
   row.currencyId = quote.id;
   row.currencyCode = quote.code;
   row.currencySymbol = quote.symbol;
-  if (row.rate.trim().isNotEmpty) return;
-  final override = rateOverride.trim();
-  if (override.isNotEmpty) {
-    row.rate = override;
-    return;
-  }
   row.rate = quote.isBase ? '' : formatHawalaRate(quote.hawalaRate);
 }
 
@@ -376,16 +370,11 @@ void attachRowCurrency(JournalRow row, CurrencyQuote quote, {String rateOverride
 /// are left unchanged so current two-amount pastes keep working.
 List<JournalRow> applyRemittanceFx(
   List<JournalRow> rows,
-  CurrencyQuote Function(String account) quoteOf, {
-  String Function(String account)? rateOf,
-}) {
+  CurrencyQuote Function(String account) quoteOf,
+) {
   for (final row in rows) {
     if (row.account.trim().isEmpty) continue;
-    attachRowCurrency(
-      row,
-      quoteOf(row.account),
-      rateOverride: rateOf?.call(row.account) ?? '',
-    );
+    attachRowCurrency(row, quoteOf(row.account));
   }
   for (var i = 0; i + 1 < rows.length; i += 2) {
     final left = rows[i];

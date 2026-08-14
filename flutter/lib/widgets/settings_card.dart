@@ -7,7 +7,6 @@ import '../state/app_controller.dart';
 import '../theme/app_theme.dart';
 import 'account_picker.dart';
 import 'common.dart';
-import 'fx_fields.dart';
 
 class SettingsCard extends StatelessWidget {
   const SettingsCard({super.key});
@@ -185,54 +184,7 @@ class DebitAccountField extends StatelessWidget {
               ),
             ],
           ),
-          const _DebitRateBox(),
         ],
-      ),
-    );
-  }
-}
-
-class _DebitRateBox extends StatefulWidget {
-  const _DebitRateBox();
-
-  @override
-  State<_DebitRateBox> createState() => _DebitRateBoxState();
-}
-
-class _DebitRateBoxState extends State<_DebitRateBox> {
-  late final TextEditingController rateCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    rateCtrl = TextEditingController(text: context.read<AppController>().debitHawalaRate);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final app = context.read<AppController>();
-    if (rateCtrl.text != app.debitHawalaRate) rateCtrl.text = app.debitHawalaRate;
-  }
-
-  @override
-  void dispose() {
-    rateCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppController>();
-    final quote = app.currencyQuoteForAccount(app.debitAccount);
-    if (quote.isBase || app.debitAccount.trim().isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: FxRateField(
-        controller: rateCtrl,
-        debit: true,
-        code: quote.code,
-        onChanged: app.setDebitHawalaRate,
       ),
     );
   }
