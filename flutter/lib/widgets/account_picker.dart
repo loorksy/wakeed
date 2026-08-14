@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/json_util.dart';
 import '../models/models.dart';
 import '../state/app_controller.dart';
+import '../theme/app_theme.dart';
 
 Future<void> showAccountPicker(BuildContext context, {required AccountPickTarget target}) async {
   final app = context.read<AppController>();
@@ -29,12 +30,12 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
-    final title = switch (app.accountPickTarget.type) {
-      'debit' => 'دليل الحسابات — المدين',
-      'chargeDebit' => 'دليل الحسابات — المدين',
-      'profitDebit' => 'دليل الحسابات — المدين',
-      _ => 'دليل الحسابات — الدائن',
+    final isDebit = switch (app.accountPickTarget.type) {
+      'debit' || 'chargeDebit' || 'profitDebit' => true,
+      _ => false,
     };
+    final title = isDebit ? 'دليل الحسابات — المدين' : 'دليل الحسابات — الدائن';
+    final tone = isDebit ? WakeedColors.err : WakeedColors.green;
     final list = app.filteredAccounts(query);
     final shown = list.take(120).toList();
     return SafeArea(
@@ -48,7 +49,7 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: Row(
                   children: [
-                    Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+                    Expanded(child: Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tone))),
                     IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                   ],
                 ),

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/json_util.dart';
 import '../models/models.dart';
 import '../state/app_controller.dart';
+import '../theme/app_theme.dart';
 import 'account_picker.dart';
 import 'common.dart';
 
@@ -146,18 +147,21 @@ class DebitAccountField extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('حساب المدين', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                const Text('حساب المدين', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WakeedColors.err)),
                 const SizedBox(height: 4),
                 InkWell(
                   onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
                   child: InputDecorator(
-                    decoration: SettingsCard.dense.copyWith(
-                      suffixIcon: const Icon(Icons.account_tree_outlined, size: 18),
+                    decoration: partyFieldDecoration(
+                      debit: true,
+                      base: SettingsCard.dense,
+                      suffixIcon: Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.err),
                       suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     ),
                     child: Text(
                       app.debitAccountLabel(),
                       overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: WakeedColors.err, fontSize: 12),
                     ),
                   ),
                 ),

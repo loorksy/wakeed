@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_controller.dart';
+import '../theme/app_theme.dart';
 
 /// Account code field that shows the chart name instead of دائن/مدين.
 class AccountNameField extends StatefulWidget {
@@ -11,12 +12,14 @@ class AccountNameField extends StatefulWidget {
     required this.fallbackLabel,
     required this.onChanged,
     this.dense = false,
+    this.debit = false,
   });
 
   final TextEditingController controller;
   final String fallbackLabel;
   final VoidCallback onChanged;
   final bool dense;
+  final bool debit;
 
   @override
   State<AccountNameField> createState() => _AccountNameFieldState();
@@ -78,15 +81,17 @@ class _AccountNameFieldState extends State<AccountNameField> {
     final dense = widget.dense
         ? const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6))
         : const InputDecoration();
+    final color = widget.debit ? WakeedColors.err : WakeedColors.green;
     return TextField(
       controller: _display,
       focusNode: _focus,
-      style: const TextStyle(fontSize: 12, height: 1.2),
-      decoration: dense.copyWith(
+      style: TextStyle(fontSize: 12, height: 1.2, color: color),
+      decoration: partyFieldDecoration(
+        debit: widget.debit,
+        base: dense,
         labelText: name.isNotEmpty && _focus.hasFocus ? name : null,
         hintText: name.isEmpty ? widget.fallbackLabel : null,
-        floatingLabelBehavior: FloatingLabelBehavior.auto,
-      ),
+      ).copyWith(floatingLabelBehavior: FloatingLabelBehavior.auto),
       onChanged: (value) {
         if (!_focus.hasFocus) return;
         widget.controller.text = value;

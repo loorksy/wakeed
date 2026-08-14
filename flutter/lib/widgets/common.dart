@@ -62,14 +62,14 @@ class StatChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: color?.withValues(alpha: 0.14) ?? Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.4)),
+          border: Border.all(color: color?.withValues(alpha: 0.55) ?? Theme.of(context).dividerColor.withValues(alpha: 0.4)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(fontSize: 11, color: muted)),
+            Text(label, style: TextStyle(fontSize: 11, color: color ?? muted)),
             const SizedBox(height: 2),
             Text(
               value,

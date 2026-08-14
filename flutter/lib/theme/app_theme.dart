@@ -24,6 +24,38 @@ class WakeedColors {
   static const lightAccent = Color(0xFF0D9488);
 }
 
+InputDecoration partyFieldDecoration({
+  required bool debit,
+  InputDecoration base = const InputDecoration(),
+  String? hintText,
+  String? labelText,
+  Widget? suffixIcon,
+  BoxConstraints? suffixIconConstraints,
+}) {
+  final color = debit ? WakeedColors.err : WakeedColors.green;
+  final border = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: BorderSide(color: color.withValues(alpha: 0.7)),
+  );
+  return base.copyWith(
+    hintText: hintText ?? base.hintText,
+    labelText: labelText ?? base.labelText,
+    suffixIcon: suffixIcon ?? base.suffixIcon,
+    suffixIconConstraints: suffixIconConstraints ?? base.suffixIconConstraints,
+    filled: true,
+    fillColor: color.withValues(alpha: 0.14),
+    hintStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: color.withValues(alpha: 0.45)),
+    labelStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: color.withValues(alpha: 0.9)),
+    floatingLabelStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+    border: border,
+    enabledBorder: border,
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: color, width: 1.5),
+    ),
+  );
+}
+
 ThemeData wakeedTheme({required bool dark}) {
   final scheme = dark
       ? const ColorScheme.dark(
