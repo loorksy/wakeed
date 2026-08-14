@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 // Literal Dart port of `parser.js` (wakeed / wakeed2).
 // Template: الاسم | المبلغ | الدائن
 // defaultDebit from UI, defaultCredit = 9830.
@@ -34,6 +36,10 @@ class JournalRow {
     this.clientNote = '',
     this.groupKey = '',
     this.balancing = false,
+    this.currencyId = '',
+    this.currencyCode = '',
+    this.currencySymbol = '',
+    this.rate = '',
   });
 
   String account;
@@ -43,6 +49,10 @@ class JournalRow {
   String clientNote;
   String groupKey;
   bool balancing;
+  String currencyId;
+  String currencyCode;
+  String currencySymbol;
+  String rate;
 
   JournalRow copy() => JournalRow(
         account: account,
@@ -52,6 +62,10 @@ class JournalRow {
         clientNote: clientNote,
         groupKey: groupKey,
         balancing: balancing,
+        currencyId: currencyId,
+        currencyCode: currencyCode,
+        currencySymbol: currencySymbol,
+        rate: rate,
       );
 
   Map<String, dynamic> toMap() => {
@@ -62,7 +76,82 @@ class JournalRow {
         'clientNote': clientNote,
         'groupKey': groupKey,
         'balancing': balancing,
+        'currencyId': currencyId,
+        'currencyCode': currencyCode,
+        'currencySymbol': currencySymbol,
+        'rate': rate,
       };
+}
+
+class CurrencyQuote {
+  const CurrencyQuote({
+    this.id = '',
+    this.code = '',
+    this.symbol = '',
+    this.hawalaRate = 1,
+    this.isBase = true,
+  });
+
+  final String id;
+  final String code;
+  final String symbol;
+  final num hawalaRate;
+  final bool isBase;
+
+  static const usd = CurrencyQuote(code: 'USD', symbol: '\$', hawalaRate: 1, isBase: true);
+
+  String get badge => symbol.trim().isNotEmpty ? symbol : (code.trim().isNotEmpty ? code : '');
+}
+
+num roundMoney(num n, [int digits = 2]) {
+  final p = math.pow(10, digits);
+  return (n * p).round() / p;
+}
+
+num hawalaRateFromApi(num apiRate, {bool isBase = false}) {
+  if (isBase) return 1;
+  final r = apiRate == 0 ? 1 : apiRate;
+  if ((r - 1).abs() < 0.0000001) return 1;
+  if (r < 1) return 1 / r;
+  return r;
+}
+
+num parseHawalaRate(String? raw) {
+  final t = (raw ?? '').toString().replaceAll(',', '').replaceAll('٫', '').trim();
+  if (t.isEmpty) return 1;
+  final n = num.tryParse(t) ?? 1;
+  return n <= 0 ? 1 : n;
+}
+
+num amountToBase(num amount, num hawalaRate, {int decimals = 2}) {
+  if (amount == 0) return 0;
+  final rate = hawalaRate <= 0 ? 1 : hawalaRate;
+  final base = (rate - 1).abs() < 0.0000001 ? amount : amount / rate;
+  return roundMoney(base, decimals);
+}
+
+num hawalaPostRate(num hawalaRate) {
+  if (hawalaRate <= 0 || (hawalaRate - 1).abs() < 0.0000001) return 1;
+  return 1 / hawalaRate;
+}
+
+String currencySymbolFor(String code, [String apiSymbol = '']) {
+  if (apiSymbol.trim().isNotEmpty) return apiSymbol.trim();
+  switch (code.toUpperCase()) {
+    case 'USD':
+    case 'US':
+      return '\$';
+    case 'TRY':
+    case 'TL':
+    case 'TRL':
+      return 'T';
+    case 'EUR':
+      return '€';
+    case 'SYP':
+      return 'ل.س';
+    default:
+      return code;
+  }
 }
 
 class CustomerGroup {
@@ -279,6 +368,17 @@ class ProfitPasteRow {
     required this.debit,
     required this.debitAmount,
     this.note = '',
+    this.debitRate = '',
+    this.creditRate = '',
+    this.debitCurrencyId = '',
+    this.creditCurrencyId = '',
+    this.debitCurrencyCode = '',
+    this.creditCurrencyCode = '',
+    this.debitCurrencySymbol = '',
+    this.creditCurrencySymbol = '',
+    this.baseCurrencyId = '',
+    this.baseCurrencyCode = '',
+    this.baseCurrencySymbol = '',
   });
 
   final String name;
@@ -287,6 +387,17 @@ class ProfitPasteRow {
   final String debit;
   final String debitAmount;
   final String note;
+  final String debitRate;
+  final String creditRate;
+  final String debitCurrencyId;
+  final String creditCurrencyId;
+  final String debitCurrencyCode;
+  final String creditCurrencyCode;
+  final String debitCurrencySymbol;
+  final String creditCurrencySymbol;
+  final String baseCurrencyId;
+  final String baseCurrencyCode;
+  final String baseCurrencySymbol;
 
   bool get isComplete =>
       credit.trim().isNotEmpty &&
@@ -420,6 +531,8 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
     final name = item.name.trim().isNotEmpty ? item.name.trim() : '${item.credit} / ${item.debit}';
     final key = 'p$i';
     final note = item.note.trim();
+    final dRate = parseHawalaRate(item.debitRate);
+    final cRate = parseHawalaRate(item.creditRate);
     rows.add(JournalRow(
       account: item.debit.trim(),
       description: name,
@@ -427,6 +540,10 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
       credit: '',
       clientNote: note,
       groupKey: key,
+      currencyId: item.debitCurrencyId,
+      currencyCode: item.debitCurrencyCode,
+      currencySymbol: item.debitCurrencySymbol,
+      rate: item.debitRate,
     ));
     rows.add(JournalRow(
       account: item.credit.trim(),
@@ -435,11 +552,22 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
       credit: cAmt,
       clientNote: note,
       groupKey: key,
+      currencyId: item.creditCurrencyId,
+      currencyCode: item.creditCurrencyCode,
+      currencySymbol: item.creditCurrencySymbol,
+      rate: item.creditRate,
     ));
     final debitVal = num.tryParse(dAmt) ?? 0;
     final creditVal = num.tryParse(cAmt) ?? 0;
-    final profit = debitVal - creditVal;
+    final profit = roundMoney(amountToBase(debitVal, dRate) - amountToBase(creditVal, cRate));
     if (profit.abs() <= 0.001) continue;
+    final settleSymbol = item.baseCurrencySymbol.trim().isNotEmpty
+        ? item.baseCurrencySymbol
+        : (item.debitCurrencySymbol.trim().isNotEmpty ? item.debitCurrencySymbol : '\$');
+    final settleCode = item.baseCurrencyCode.trim().isNotEmpty
+        ? item.baseCurrencyCode
+        : item.debitCurrencyCode;
+    final settleId = item.baseCurrencyId.trim().isNotEmpty ? item.baseCurrencyId : item.debitCurrencyId;
     if (profit > 0) {
       rows.add(JournalRow(
         account: item.debit.trim(),
@@ -449,6 +577,10 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
         clientNote: note,
         groupKey: key,
         balancing: true,
+        currencyId: settleId,
+        currencyCode: settleCode,
+        currencySymbol: settleSymbol,
+        rate: '1',
       ));
     } else {
       rows.add(JournalRow(
@@ -459,6 +591,10 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
         clientNote: note,
         groupKey: key,
         balancing: true,
+        currencyId: settleId,
+        currencyCode: settleCode,
+        currencySymbol: settleSymbol,
+        rate: '1',
       ));
     }
   }
@@ -502,13 +638,33 @@ List<CustomerGroup> profitLedgerGroups(List<JournalRow>? rows) {
 Map<String, num> profitPasteTotals(List<ProfitPasteRow> items) {
   num debit = 0;
   num credit = 0;
+  num debitBase = 0;
+  num creditBase = 0;
   var count = 0;
+  var hasFx = false;
   for (final item in items.where((e) => e.isComplete)) {
-    debit += num.tryParse(cleanAmount(item.debitAmount)) ?? 0;
-    credit += num.tryParse(cleanAmount(item.creditAmount)) ?? 0;
+    final dAmt = num.tryParse(cleanAmount(item.debitAmount)) ?? 0;
+    final cAmt = num.tryParse(cleanAmount(item.creditAmount)) ?? 0;
+    final dRate = parseHawalaRate(item.debitRate);
+    final cRate = parseHawalaRate(item.creditRate);
+    if ((dRate - 1).abs() > 0.0001 || (cRate - 1).abs() > 0.0001) hasFx = true;
+    debit += dAmt;
+    credit += cAmt;
+    debitBase += amountToBase(dAmt, dRate);
+    creditBase += amountToBase(cAmt, cRate);
     count += 1;
   }
-  return {'debit': debit, 'credit': credit, 'diff': debit - credit, 'count': count};
+  debitBase = roundMoney(debitBase);
+  creditBase = roundMoney(creditBase);
+  return {
+    'debit': debit,
+    'credit': credit,
+    'debitBase': debitBase,
+    'creditBase': creditBase,
+    'diff': roundMoney(debitBase - creditBase),
+    'count': count,
+    'fx': hasFx ? 1 : 0,
+  };
 }
 
 final String profitSheetTemplate = [

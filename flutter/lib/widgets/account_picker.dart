@@ -89,7 +89,13 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                           return ListTile(
                             selected: active,
                             title: Text(code, style: const TextStyle(fontWeight: FontWeight.w800)),
-                            subtitle: Text(name),
+                            subtitle: Text(
+                              [
+                                name,
+                                if (app.currencyQuoteForAccount(code).badge.isNotEmpty)
+                                  app.currencyQuoteForAccount(code).badge,
+                              ].where((s) => s.toString().trim().isNotEmpty).join(' · '),
+                            ),
                             onTap: () => _pick(app, code),
                           );
                         },
@@ -118,13 +124,11 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
         }
         app.updateChargeEntry(entry);
       } else if (target.type == 'profitCredit' || target.type == 'profitDebit') {
-        final entry = app.profitEntries.firstWhere((e) => e.id == target.entryId);
-        if (target.type == 'profitCredit') {
-          entry.credit = code;
-        } else {
-          entry.debit = code;
-        }
-        app.updateProfitEntry(entry);
+        app.applyProfitAccount(
+          target.entryId!,
+          debit: target.type == 'profitDebit',
+          code: code,
+        );
       }
     } else {
       app.selectDebitAccount(code);

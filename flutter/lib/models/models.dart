@@ -99,6 +99,8 @@ class ProfitEntry {
     this.credit = '',
     this.creditAmount = '',
     this.note = '',
+    this.debitRate = '',
+    this.creditRate = '',
   });
 
   String id;
@@ -108,6 +110,8 @@ class ProfitEntry {
   String credit;
   String creditAmount;
   String note;
+  String debitRate;
+  String creditRate;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -117,6 +121,8 @@ class ProfitEntry {
         'credit': credit,
         'creditAmount': creditAmount,
         'note': note,
+        'debitRate': debitRate,
+        'creditRate': creditRate,
       };
 
   factory ProfitEntry.fromJson(Map<String, dynamic> json) {
@@ -128,6 +134,8 @@ class ProfitEntry {
       credit: (json['credit'] ?? '').toString(),
       creditAmount: (json['creditAmount'] ?? json['credit_amount'] ?? '').toString(),
       note: (json['note'] ?? '').toString(),
+      debitRate: (json['debitRate'] ?? json['debit_rate'] ?? '').toString(),
+      creditRate: (json['creditRate'] ?? json['credit_rate'] ?? '').toString(),
     );
   }
 }

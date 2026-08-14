@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/remittance_parser.dart';
 import '../theme/app_theme.dart';
 
 class WakeedMark extends StatelessWidget {
@@ -78,6 +79,65 @@ class StatChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class ProfitFxBar extends StatelessWidget {
+  const ProfitFxBar({
+    super.key,
+    required this.diff,
+    required this.creditBase,
+    required this.debitBase,
+    this.symbol = '\$',
+    this.compact = false,
+  });
+
+  final num diff;
+  final num creditBase;
+  final num debitBase;
+  final String symbol;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = compact ? const EdgeInsets.symmetric(horizontal: 6, vertical: 5) : const EdgeInsets.symmetric(horizontal: 8, vertical: 8);
+    final valueSize = compact ? 13.0 : 16.0;
+    final labelSize = compact ? 9.0 : 11.0;
+    Widget box(String label, String value, Color color) {
+      return Expanded(
+        child: Container(
+          padding: pad,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.55)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: labelSize, color: color, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 1),
+              Text(
+                value,
+                style: TextStyle(fontSize: valueSize, fontWeight: FontWeight.w800, color: color),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final unit = symbol.trim().isEmpty ? '' : ' $symbol';
+    return Row(
+      textDirection: TextDirection.ltr,
+      children: [
+        box('فرق', '${formatProfitSigned(diff)}$unit', WakeedColors.err),
+        const SizedBox(width: 6),
+        box('دائن', '${formatProfitAmount(creditBase)}$unit', WakeedColors.green),
+        const SizedBox(width: 6),
+        box('مدين', '${formatProfitAmount(debitBase)}$unit', WakeedColors.pink),
+      ],
     );
   }
 }

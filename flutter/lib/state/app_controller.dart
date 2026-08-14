@@ -62,6 +62,7 @@ class AppController extends ChangeNotifier {
   List<dynamic> journalTypes = [];
   List<Map<String, dynamic>> costCenters = [];
   dynamic currency;
+  List<dynamic> currencies = [];
   dynamic sampleDetail;
   dynamic sampleEntry;
   List<dynamic> accounts = [];
@@ -558,12 +559,16 @@ class AppController extends ChangeNotifier {
         _api('GET', '/api/CostCenter/GetTree').catchError((_) => []),
         _api('GET', '/api/JournalEntry/GetLast').catchError((_) => null),
         _api('GET', '/api/NormalAccount?leafNormalAccounts=true&withBalance=false').catchError((_) => null),
+        _api('GET', '/api/Currency').catchError(
+          (_) => _api('GET', '/api/Currency/GetAll').catchError((_) => []),
+        ),
       ]);
       final types = results[0];
       currency = results[1];
       final centers = results[2];
       sampleEntry = results[3];
       final accountsRaw = results[4];
+      currencies = asList(results[5]);
 
       journalTypes = types is List ? types : [];
       costCenters = flattenCostCenters(centers is List ? centers : []);
@@ -780,6 +785,98 @@ class AppController extends ChangeNotifier {
       if (label != key) return label;
     }
     return '';
+  }
+
+  CurrencyQuote baseCurrencyQuote() {
+    if (currency is Map) {
+      final code = pickCurrencyCode(currency);
+      final id = pickId(currency);
+      final resolvedCode = code.isNotEmpty ? code : 'USD';
+      return CurrencyQuote(
+        id: id,
+        code: resolvedCode,
+        symbol: currencySymbolFor(resolvedCode, pickCurrencySymbol(currency)),
+        hawalaRate: 1,
+        isBase: true,
+      );
+    }
+    return CurrencyQuote.usd;
+  }
+
+  Map<String, dynamic>? _currencyById(String id) {
+    if (id.isEmpty) return null;
+    for (final item in currencies) {
+      if (item is Map && pickId(item) == id) return Map<String, dynamic>.from(item);
+    }
+    return null;
+  }
+
+  CurrencyQuote currencyQuoteOf(dynamic acc) {
+    final base = baseCurrencyQuote();
+    if (acc == null) return base;
+    final nested = pickAccountCurrency(acc);
+    final id = pickAccountCurrencyId(acc);
+    var cur = id.isNotEmpty ? _currencyById(id) : null;
+    cur ??= nested;
+    if (cur == null && acc is Map) {
+      final codeOnAcc = (acc['CurrencyCode'] ?? acc['currencyCode'] ?? '').toString().trim();
+      final symbolOnAcc =
+          (acc['CurrencySymbol'] ?? acc['currencySymbol'] ?? acc['Symbol'] ?? '').toString().trim();
+      final rateOnAcc = acc['CurrencyRate'] ?? acc['currencyRate'];
+      if (id.isNotEmpty || codeOnAcc.isNotEmpty) {
+        cur = {
+          if (id.isNotEmpty) 'Id': id,
+          if (codeOnAcc.isNotEmpty) 'Code': codeOnAcc,
+          if (symbolOnAcc.isNotEmpty) 'Symbol': symbolOnAcc,
+          'Rate': ?rateOnAcc,
+        };
+      }
+    }
+    if (cur == null && id.isEmpty) return base;
+    cur ??= {'Id': id};
+    final curId = pickId(cur).isNotEmpty ? pickId(cur) : id;
+    final code = pickCurrencyCode(cur);
+    final sameId = curId.isNotEmpty && base.id.isNotEmpty && curId == base.id;
+    final sameCode =
+        code.isNotEmpty && base.code.isNotEmpty && code.toUpperCase() == base.code.toUpperCase();
+    final isBase = sameId || sameCode || (curId.isEmpty && code.isEmpty);
+    final apiRate = pickCurrencyRate(cur);
+    final hawala = hawalaRateFromApi(apiRate, isBase: isBase);
+    final resolvedCode = code.isNotEmpty ? code : (isBase ? base.code : '');
+    return CurrencyQuote(
+      id: curId,
+      code: resolvedCode,
+      symbol: currencySymbolFor(resolvedCode, pickCurrencySymbol(cur)),
+      hawalaRate: isBase ? 1 : hawala,
+      isBase: isBase,
+    );
+  }
+
+  CurrencyQuote currencyQuoteForAccount(String code) {
+    final key = normalizeAccountKey(code);
+    if (key.isEmpty) return baseCurrencyQuote();
+    return currencyQuoteOf(_accountByCode(key));
+  }
+
+  String defaultHawalaRateFor(String accountCode) {
+    final quote = currencyQuoteForAccount(accountCode);
+    if (quote.isBase) return '';
+    return formatProfitAmount(quote.hawalaRate);
+  }
+
+  void applyProfitAccount(String entryId, {required bool debit, required String code}) {
+    final i = profitEntries.indexWhere((e) => e.id == entryId);
+    if (i < 0) return;
+    final entry = profitEntries[i];
+    final rate = defaultHawalaRateFor(code);
+    if (debit) {
+      entry.debit = code;
+      entry.debitRate = rate;
+    } else {
+      entry.credit = code;
+      entry.creditRate = rate;
+    }
+    updateProfitEntry(entry);
   }
 
   String debitDefaultHint() {
@@ -1099,22 +1196,89 @@ class AppController extends ChangeNotifier {
   List<ProfitPasteRow> currentProfitPaste() {
     if (profitMode == 'each') {
       return [
-        for (final entry in profitEntries)
-          ProfitPasteRow(
-            name: entry.name.trim().isNotEmpty
-                ? entry.name.trim()
-                : (entry.credit.trim().isNotEmpty && entry.debit.trim().isNotEmpty
-                    ? '${entry.credit} / ${entry.debit}'
-                    : ''),
-            credit: entry.credit,
-            creditAmount: entry.creditAmount,
-            debit: entry.debit,
-            debitAmount: entry.debitAmount,
-            note: entry.note,
-          ),
+        for (final entry in profitEntries) _profitPasteFromEntry(entry),
       ].where((e) => e.isComplete).toList();
     }
-    return parseProfitTable(tableProfit);
+    return [for (final row in parseProfitTable(tableProfit)) _enrichProfitPaste(row)];
+  }
+
+  ProfitPasteRow _profitPasteFromEntry(ProfitEntry entry) {
+    return _enrichProfitPaste(
+      ProfitPasteRow(
+        name: entry.name.trim().isNotEmpty
+            ? entry.name.trim()
+            : (entry.credit.trim().isNotEmpty && entry.debit.trim().isNotEmpty
+                ? '${entry.credit} / ${entry.debit}'
+                : ''),
+        credit: entry.credit,
+        creditAmount: entry.creditAmount,
+        debit: entry.debit,
+        debitAmount: entry.debitAmount,
+        note: entry.note,
+        debitRate: entry.debitRate,
+        creditRate: entry.creditRate,
+      ),
+    );
+  }
+
+  ProfitPasteRow _enrichProfitPaste(ProfitPasteRow row) {
+    final debitQ = currencyQuoteForAccount(row.debit);
+    final creditQ = currencyQuoteForAccount(row.credit);
+    final base = baseCurrencyQuote();
+    final debitRate = row.debitRate.trim().isNotEmpty
+        ? row.debitRate
+        : (debitQ.isBase ? '' : formatProfitAmount(debitQ.hawalaRate));
+    final creditRate = row.creditRate.trim().isNotEmpty
+        ? row.creditRate
+        : (creditQ.isBase ? '' : formatProfitAmount(creditQ.hawalaRate));
+    return ProfitPasteRow(
+      name: row.name,
+      credit: row.credit,
+      creditAmount: row.creditAmount,
+      debit: row.debit,
+      debitAmount: row.debitAmount,
+      note: row.note,
+      debitRate: debitRate,
+      creditRate: creditRate,
+      debitCurrencyId: debitQ.id,
+      creditCurrencyId: creditQ.id,
+      debitCurrencyCode: debitQ.code,
+      creditCurrencyCode: creditQ.code,
+      debitCurrencySymbol: debitQ.symbol,
+      creditCurrencySymbol: creditQ.symbol,
+      baseCurrencyId: base.id,
+      baseCurrencyCode: base.code,
+      baseCurrencySymbol: base.symbol,
+    );
+  }
+
+  ProfitPasteRow _profitPasteFromGroup(CustomerGroup group) {
+    final debitRow = group.rows.firstWhere(
+      (r) => r.debit.isNotEmpty && !r.balancing,
+      orElse: () => group.rows.first,
+    );
+    final creditRow = group.rows.firstWhere(
+      (r) => r.credit.isNotEmpty && !r.balancing,
+      orElse: () => group.rows.last,
+    );
+    return _enrichProfitPaste(
+      ProfitPasteRow(
+        name: group.name,
+        credit: creditRow.account,
+        creditAmount: creditRow.credit,
+        debit: debitRow.account,
+        debitAmount: debitRow.debit,
+        note: groupClientNote(group),
+        debitRate: debitRow.rate,
+        creditRate: creditRow.rate,
+        debitCurrencyId: debitRow.currencyId,
+        creditCurrencyId: creditRow.currencyId,
+        debitCurrencyCode: debitRow.currencyCode,
+        creditCurrencyCode: creditRow.currencyCode,
+        debitCurrencySymbol: debitRow.currencySymbol,
+        creditCurrencySymbol: creditRow.currencySymbol,
+      ),
+    );
   }
 
   List<JournalRow> profitRows() {
@@ -1284,8 +1448,14 @@ class AppController extends ChangeNotifier {
   ) {
     final amount = numOf(row.debit.isNotEmpty ? row.debit : row.credit);
     final isDebit = row.debit.isNotEmpty;
-    final currencyId = pickId(currency);
-    final rate = numOf(currency is Map ? (currency['Rate'] ?? currency['rate'] ?? 1) : 1);
+    final baseCurrencyId = pickId(currency);
+    final baseRate = numOf(currency is Map ? (currency['Rate'] ?? currency['rate'] ?? 1) : 1);
+    final hawala = parseHawalaRate(row.rate);
+    final currencyId = row.currencyId.isNotEmpty ? row.currencyId : baseCurrencyId;
+    final rate = row.rate.trim().isNotEmpty
+        ? hawalaPostRate(hawala)
+        : (baseRate == 0 ? 1 : baseRate);
+    final equivalent = amountToBase(amount, row.rate.trim().isNotEmpty ? hawala : 1);
     final accountId = pickId(account);
     final note = extras['lineNote'] ??
         composeNote(
@@ -1309,6 +1479,12 @@ class AppController extends ChangeNotifier {
       'discountTaking': 0,
       'amountAfterDiscount': amount,
     };
+    if (row.rate.trim().isNotEmpty || row.currencyId.isNotEmpty) {
+      detail['equivalent'] = equivalent;
+      detail['Equivalent'] = equivalent;
+      detail['debitEquivalent'] = isDebit ? equivalent : 0;
+      detail['creditEquivalent'] = isDebit ? 0 : equivalent;
+    }
     if (extras['costCenterId'] != null && extras['costCenterId'].toString().isNotEmpty) {
       detail['costCenterID'] = extras['costCenterId'];
     }
@@ -2033,17 +2209,7 @@ class AppController extends ChangeNotifier {
       return;
     }
     final skipNote = skipped.isNotEmpty ? '\n(${skipped.length} سنداً موجود مسبقاً في السجل — تم تخطيهم)' : '';
-    final paste = [
-      for (final group in pending)
-        ProfitPasteRow(
-          name: group.name,
-          credit: group.rows.firstWhere((r) => r.credit.isNotEmpty && !r.balancing, orElse: () => group.rows.last).account,
-          creditAmount: group.rows.firstWhere((r) => r.credit.isNotEmpty && !r.balancing, orElse: () => group.rows.last).credit,
-          debit: group.rows.firstWhere((r) => r.debit.isNotEmpty && !r.balancing, orElse: () => group.rows.first).account,
-          debitAmount: group.rows.firstWhere((r) => r.debit.isNotEmpty && !r.balancing, orElse: () => group.rows.first).debit,
-          note: groupClientNote(group),
-        ),
-    ];
+    final paste = [for (final group in pending) _profitPasteFromGroup(group)];
     final rebuilt = buildProfitJournalRows(paste);
     var resolved = Map<String, dynamic>.from(prepared.resolved);
     final missing = rebuilt

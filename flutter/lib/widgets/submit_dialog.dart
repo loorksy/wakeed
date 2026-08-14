@@ -125,7 +125,7 @@ class _ProfitConfirmSheet extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        formatProfitSigned(diff),
+                        '${formatProfitSigned(diff)} ${app.baseCurrencyQuote().symbol}',
                         style: TextStyle(
                           fontSize: 52,
                           fontWeight: FontWeight.w800,

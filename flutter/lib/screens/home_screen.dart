@@ -856,7 +856,6 @@ class _ProfitTabState extends State<ProfitTab> {
     app.ensureProfitEntries();
     final rows = app.profitRows();
     final groups = profitLedgerGroups(rows);
-    final t = app.totals(rows);
     final paste = app.currentProfitPaste();
     final pt = profitPasteTotals(paste);
     final profit = pt['diff'] ?? 0;
@@ -880,8 +879,8 @@ class _ProfitTabState extends State<ProfitTab> {
             final name = app.chartAccountName(rows[i].account);
             return name.isNotEmpty ? name : rows[i].account;
           }(),
-          rows[i].debit,
-          rows[i].credit,
+          _profitAmountCell(rows[i].debit, rows[i]),
+          _profitAmountCell(rows[i].credit, rows[i]),
           app.resolvedLabel(app.resolvedProfit, rows[i].account),
         ],
     ];
@@ -1012,25 +1011,24 @@ class _ProfitTabState extends State<ProfitTab> {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              StatChip(label: 'سندات', value: '${groups.length}'),
-              const SizedBox(width: 6),
-              StatChip(label: 'مدين', value: '${pt['debit'] ?? t['debit']}', color: WakeedColors.err),
-              const SizedBox(width: 6),
-              StatChip(label: 'دائن', value: '${pt['credit'] ?? t['credit']}', color: WakeedColors.green),
-              const SizedBox(width: 6),
-              StatChip(
-                label: profitKindLabel(profit),
-                value: formatProfitSigned(profit),
-                color: profit > 0.001
-                    ? WakeedColors.green
-                    : profit < -0.001
-                        ? WakeedColors.err
-                        : WakeedColors.accent,
-              ),
-            ],
+          Text(
+            'سندات ${groups.length}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
+          const SizedBox(height: 6),
+          ProfitFxBar(
+            diff: profit,
+            creditBase: pt['creditBase'] ?? pt['credit'] ?? 0,
+            debitBase: pt['debitBase'] ?? pt['debit'] ?? 0,
+            symbol: app.baseCurrencyQuote().symbol,
+          ),
+          if ((pt['fx'] ?? 0) > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'الفرق بالدولار حسب تسعيرة الحساب',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 8),
           PreviewTable(
             columns: const ['سند', '#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
@@ -1039,6 +1037,12 @@ class _ProfitTabState extends State<ProfitTab> {
         ],
       ),
     );
+  }
+
+  String _profitAmountCell(String amount, JournalRow row) {
+    if (amount.trim().isEmpty) return '';
+    final badge = row.currencySymbol.trim().isNotEmpty ? row.currencySymbol : row.currencyCode;
+    return badge.isEmpty ? amount : '$amount $badge';
   }
 }
 
@@ -1056,8 +1060,10 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
   late final TextEditingController nameCtrl;
   late final TextEditingController creditCtrl;
   late final TextEditingController creditAmtCtrl;
+  late final TextEditingController creditRateCtrl;
   late final TextEditingController debitCtrl;
   late final TextEditingController debitAmtCtrl;
+  late final TextEditingController debitRateCtrl;
   late final TextEditingController noteCtrl;
 
   static const _dense = InputDecoration(
@@ -1073,8 +1079,10 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     nameCtrl = TextEditingController(text: widget.entry.name);
     creditCtrl = TextEditingController(text: widget.entry.credit);
     creditAmtCtrl = TextEditingController(text: widget.entry.creditAmount);
+    creditRateCtrl = TextEditingController(text: widget.entry.creditRate);
     debitCtrl = TextEditingController(text: widget.entry.debit);
     debitAmtCtrl = TextEditingController(text: widget.entry.debitAmount);
+    debitRateCtrl = TextEditingController(text: widget.entry.debitRate);
     noteCtrl = TextEditingController(text: widget.entry.note);
   }
 
@@ -1083,10 +1091,24 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     super.didUpdateWidget(oldWidget);
     if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
     if (debitCtrl.text != widget.entry.debit) debitCtrl.text = widget.entry.debit;
+    if (creditRateCtrl.text != widget.entry.creditRate) creditRateCtrl.text = widget.entry.creditRate;
+    if (debitRateCtrl.text != widget.entry.debitRate) debitRateCtrl.text = widget.entry.debitRate;
     if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
-    if (creditAmtCtrl.text != widget.entry.creditAmount && widget.entry.creditAmount.isEmpty) creditAmtCtrl.clear();
-    if (debitAmtCtrl.text != widget.entry.debitAmount && widget.entry.debitAmount.isEmpty) debitAmtCtrl.clear();
+    if (creditAmtCtrl.text != widget.entry.creditAmount && widget.entry.creditAmount.isEmpty) {
+      creditAmtCtrl.clear();
+    }
+    if (debitAmtCtrl.text != widget.entry.debitAmount && widget.entry.debitAmount.isEmpty) {
+      debitAmtCtrl.clear();
+    }
     if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fillMissingRates();
+    });
   }
 
   @override
@@ -1094,32 +1116,127 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     nameCtrl.dispose();
     creditCtrl.dispose();
     creditAmtCtrl.dispose();
+    creditRateCtrl.dispose();
     debitCtrl.dispose();
     debitAmtCtrl.dispose();
+    debitRateCtrl.dispose();
     noteCtrl.dispose();
     super.dispose();
   }
 
-  void _sync() {
+  void _sync({bool creditAccountChanged = false, bool debitAccountChanged = false}) {
     final app = context.read<AppController>();
+    if (creditAccountChanged) {
+      final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
+      creditRateCtrl.text = creditQ.isBase ? '' : formatProfitAmount(creditQ.hawalaRate);
+    }
+    if (debitAccountChanged) {
+      final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
+      debitRateCtrl.text = debitQ.isBase ? '' : formatProfitAmount(debitQ.hawalaRate);
+    }
     widget.entry
       ..name = nameCtrl.text
       ..credit = creditCtrl.text
       ..creditAmount = creditAmtCtrl.text
+      ..creditRate = creditRateCtrl.text
       ..debit = debitCtrl.text
       ..debitAmount = debitAmtCtrl.text
+      ..debitRate = debitRateCtrl.text
       ..note = noteCtrl.text;
     app.updateProfitEntry(widget.entry);
+  }
+
+  void _fillMissingRates() {
+    final app = context.read<AppController>();
+    var changed = false;
+    if (creditCtrl.text.trim().isNotEmpty && creditRateCtrl.text.isEmpty) {
+      final quote = app.currencyQuoteForAccount(creditCtrl.text);
+      if (!quote.isBase) {
+        creditRateCtrl.text = formatProfitAmount(quote.hawalaRate);
+        widget.entry.creditRate = creditRateCtrl.text;
+        changed = true;
+      }
+    }
+    if (debitCtrl.text.trim().isNotEmpty && debitRateCtrl.text.isEmpty) {
+      final quote = app.currencyQuoteForAccount(debitCtrl.text);
+      if (!quote.isBase) {
+        debitRateCtrl.text = formatProfitAmount(quote.hawalaRate);
+        widget.entry.debitRate = debitRateCtrl.text;
+        changed = true;
+      }
+    }
+    if (changed) app.updateProfitEntry(widget.entry);
+  }
+
+  Widget _currencyBadge(String symbol, Color color) {
+    if (symbol.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 6, right: 4),
+      child: Text(
+        symbol,
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: color),
+      ),
+    );
+  }
+
+  Widget _amountField({
+    required TextEditingController controller,
+    required bool debit,
+    required String symbol,
+  }) {
+    final color = debit ? WakeedColors.err : WakeedColors.green;
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      style: TextStyle(fontSize: 12, height: 1.2, color: color),
+      decoration: partyFieldDecoration(
+        debit: debit,
+        base: _dense,
+        hintText: 'المبلغ',
+        suffixIcon: _currencyBadge(symbol, color),
+        suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+      ),
+      onChanged: (_) => _sync(),
+    );
+  }
+
+  Widget _rateField({
+    required TextEditingController controller,
+    required bool debit,
+    required String code,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      style: TextStyle(
+        fontSize: 12,
+        height: 1.2,
+        color: debit ? WakeedColors.err : WakeedColors.green,
+      ),
+      decoration: partyFieldDecoration(
+        debit: debit,
+        base: _dense,
+        hintText: 'سعر الصرف',
+        labelText: code.isEmpty ? 'سعر الصرف' : 'سعر $code',
+      ),
+      onChanged: (_) => _sync(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
+    final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
     final c = num.tryParse(cleanAmount(creditAmtCtrl.text)) ?? 0;
     final d = num.tryParse(cleanAmount(debitAmtCtrl.text)) ?? 0;
-    final profit = d - c;
+    final cRate = parseHawalaRate(creditRateCtrl.text);
+    final dRate = parseHawalaRate(debitRateCtrl.text);
+    final creditBase = amountToBase(c, cRate);
+    final debitBase = amountToBase(d, dRate);
+    final profit = roundMoney(debitBase - creditBase);
     final debitWho = app.chartAccountName(debitCtrl.text);
-    final forText = debitWho;
+    final baseSymbol = app.baseCurrencyQuote().symbol;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
@@ -1138,7 +1255,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${profitKindLabel(profit)} ${formatProfitSigned(profit)}',
+                      '${profitKindLabel(profit)} ${formatProfitSigned(profit)} $baseSymbol',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
@@ -1149,9 +1266,9 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                                 : WakeedColors.accent,
                       ),
                     ),
-                    if (forText.isNotEmpty)
+                    if (debitWho.isNotEmpty)
                       Text(
-                        forText,
+                        debitWho,
                         style: TextStyle(
                           fontSize: 11,
                           color: profit > 0.001
@@ -1179,7 +1296,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: AccountNameField(
                   controller: creditCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: _sync,
+                  onChanged: () => _sync(creditAccountChanged: true),
                   dense: true,
                 ),
               ),
@@ -1191,16 +1308,14 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               ),
               Expanded(
                 flex: 2,
-                child: TextField(
-                  controller: creditAmtCtrl,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 12, height: 1.2, color: WakeedColors.green),
-                  decoration: partyFieldDecoration(debit: false, base: _dense, hintText: 'المبلغ'),
-                  onChanged: (_) => _sync(),
-                ),
+                child: _amountField(controller: creditAmtCtrl, debit: false, symbol: creditQ.badge),
               ),
             ],
           ),
+          if (!creditQ.isBase && creditCtrl.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _rateField(controller: creditRateCtrl, debit: false, code: creditQ.code),
+          ],
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1209,7 +1324,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 child: AccountNameField(
                   controller: debitCtrl,
                   fallbackLabel: 'الحساب',
-                  onChanged: _sync,
+                  onChanged: () => _sync(debitAccountChanged: true),
                   dense: true,
                   debit: true,
                 ),
@@ -1222,16 +1337,24 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               ),
               Expanded(
                 flex: 2,
-                child: TextField(
-                  controller: debitAmtCtrl,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 12, height: 1.2, color: WakeedColors.err),
-                  decoration: partyFieldDecoration(debit: true, base: _dense, hintText: 'المبلغ'),
-                  onChanged: (_) => _sync(),
-                ),
+                child: _amountField(controller: debitAmtCtrl, debit: true, symbol: debitQ.badge),
               ),
             ],
           ),
+          if (!debitQ.isBase && debitCtrl.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _rateField(controller: debitRateCtrl, debit: true, code: debitQ.code),
+          ],
+          if (c > 0 || d > 0) ...[
+            const SizedBox(height: 8),
+            ProfitFxBar(
+              diff: profit,
+              creditBase: creditBase,
+              debitBase: debitBase,
+              symbol: baseSymbol,
+              compact: true,
+            ),
+          ],
           const SizedBox(height: 6),
           Row(
             children: [

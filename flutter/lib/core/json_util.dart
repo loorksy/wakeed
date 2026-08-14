@@ -223,6 +223,56 @@ num numOf(dynamic v) {
   return n;
 }
 
+String pickAccountCurrencyId(dynamic acc) {
+  if (acc is! Map) return '';
+  final nested = acc['Currency'] ?? acc['currency'];
+  final id = acc['CurrencyId'] ??
+      acc['currencyId'] ??
+      acc['CurrencyID'] ??
+      acc['currencyID'] ??
+      (nested is Map ? (nested['Id'] ?? nested['id']) : null);
+  return id == null ? '' : id.toString().trim();
+}
+
+Map<String, dynamic>? pickAccountCurrency(dynamic acc) {
+  if (acc is! Map) return null;
+  final nested = acc['Currency'] ?? acc['currency'];
+  if (nested is Map) return Map<String, dynamic>.from(nested);
+  return null;
+}
+
+String pickCurrencyCode(dynamic currency) {
+  if (currency is! Map) return '';
+  return (currency['Code'] ??
+          currency['code'] ??
+          currency['CurrencyCode'] ??
+          currency['currencyCode'] ??
+          currency['IsoCode'] ??
+          currency['isoCode'] ??
+          '')
+      .toString()
+      .trim();
+}
+
+String pickCurrencySymbol(dynamic currency) {
+  if (currency is! Map) return '';
+  return (currency['Symbol'] ??
+          currency['symbol'] ??
+          currency['CurrencySymbol'] ??
+          currency['currencySymbol'] ??
+          '')
+      .toString()
+      .trim();
+}
+
+num pickCurrencyRate(dynamic currency) {
+  if (currency is! Map) return 1;
+  final n = numOf(
+    currency['Rate'] ?? currency['rate'] ?? currency['ExchangeRate'] ?? currency['exchangeRate'] ?? 1,
+  );
+  return n == 0 ? 1 : n;
+}
+
 String todayInputValue() {
   final d = DateTime.now();
   final m = d.month.toString().padLeft(2, '0');

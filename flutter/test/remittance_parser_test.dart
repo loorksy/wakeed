@@ -165,4 +165,77 @@ void main() {
       expect(groups[1].name, 'ب');
     });
   });
+
+  group('profit FX conversion', () {
+    test('hawalaRateFromApi inverts rates below 1', () {
+      expect(hawalaRateFromApi(1, isBase: true), 1);
+      expect(hawalaRateFromApi(0.020933, isBase: false), closeTo(47.77, 0.02));
+      expect(hawalaRateFromApi(47.77, isBase: false), 47.77);
+    });
+
+    test('3384 TRY at 47.77 equals 70.84 USD', () {
+      expect(amountToBase(3384, 47.77), 70.84);
+      expect(roundMoney(72 - 70.84), 1.16);
+    });
+
+    test('profit is in USD not TRY', () {
+      final totals = profitPasteTotals([
+        ProfitPasteRow(
+          name: 'راتب',
+          credit: '1731',
+          creditAmount: '3384',
+          debit: '9830',
+          debitAmount: '72',
+          debitRate: '1',
+          creditRate: '47.77',
+          debitCurrencyCode: 'USD',
+          creditCurrencyCode: 'TRY',
+          debitCurrencySymbol: '\$',
+          creditCurrencySymbol: 'T',
+          baseCurrencyCode: 'USD',
+          baseCurrencySymbol: '\$',
+        ),
+      ]);
+      expect(totals['creditBase'], 70.84);
+      expect(totals['debitBase'], 72);
+      expect(totals['diff'], 1.16);
+      expect(totals['fx'], 1);
+    });
+
+    test('balancing line is the USD difference on the debit account', () {
+      final rows = buildProfitJournalRows([
+        ProfitPasteRow(
+          name: 'راتب',
+          credit: '1731',
+          creditAmount: '3,384',
+          debit: '9830',
+          debitAmount: '72',
+          debitRate: '',
+          creditRate: '47.77',
+          debitCurrencyId: 'usd',
+          creditCurrencyId: 'try',
+          debitCurrencyCode: 'USD',
+          creditCurrencyCode: 'TRY',
+          debitCurrencySymbol: '\$',
+          creditCurrencySymbol: 'T',
+          baseCurrencyId: 'usd',
+          baseCurrencyCode: 'USD',
+          baseCurrencySymbol: '\$',
+        ),
+      ]);
+      expect(rows.length, 3);
+      expect(rows[0].account, '9830');
+      expect(rows[0].debit, '72');
+      expect(rows[0].currencySymbol, '\$');
+      expect(rows[1].account, '1731');
+      expect(rows[1].credit, '3384');
+      expect(rows[1].currencySymbol, 'T');
+      expect(rows[1].rate, '47.77');
+      expect(rows[2].balancing, true);
+      expect(rows[2].account, '9830');
+      expect(rows[2].credit, '1.16');
+      expect(rows[2].rate, '1');
+      expect(rows[2].currencyCode, 'USD');
+    });
+  });
 }
