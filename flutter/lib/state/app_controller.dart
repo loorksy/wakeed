@@ -53,6 +53,7 @@ class AppController extends ChangeNotifier {
   String profitMode = 'batch'; // batch | each
   num pendingConfirmProfit = 0;
   int pendingConfirmCount = 0;
+  String pendingConfirmFor = '';
   String wakeedUserId = '';
   bool ledgerSyncing = false;
 
@@ -1298,7 +1299,7 @@ class AppController extends ChangeNotifier {
     }
 
     final t = totals(rows);
-    if (((t['debit']! - t['credit']!).abs()) > 0.001) {
+    if (section != 'profit' && ((t['debit']! - t['credit']!).abs()) > 0.001) {
       throw PlatformApiException('القيد غير متوازن: مدين ${t['debit']} ≠ دائن ${t['credit']}');
     }
 
@@ -1723,6 +1724,7 @@ class AppController extends ChangeNotifier {
     pendingConfirmPrepared = null;
     pendingConfirmProfit = 0;
     pendingConfirmCount = 0;
+    pendingConfirmFor = '';
     _persistDialog(null);
     notifications?.cancelAll();
     if (!submitJob.active) {
@@ -1870,14 +1872,33 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  String profitPartyLabel(ProfitPasteRow row) {
+    final name = row.name.trim();
+    if (name.isNotEmpty && !RegExp(r'^\S+\s*/\s*\S+$').hasMatch(name)) return name;
+    final resolved = resolvedLabel(resolvedProfit, row.debit);
+    if (resolved.isNotEmpty && resolved != 'لم يُحل بعد') return resolved;
+    return row.debit.trim();
+  }
+
+  String profitPartiesLabel(List<ProfitPasteRow> paste) {
+    final labels = <String>[];
+    for (final row in paste) {
+      final label = profitPartyLabel(row);
+      if (label.isNotEmpty && !labels.contains(label)) labels.add(label);
+    }
+    return labels.join('، ');
+  }
+
   Future<void> submitProfit() async {
     if (!guardSubmitJob()) return;
     final prepared = await previewAndResolve('each', forSubmit: false, source: 'profit');
     if (prepared == null) return;
-    final totalsMap = profitPasteTotals(currentProfitPaste());
+    final paste = currentProfitPaste();
+    final totalsMap = profitPasteTotals(paste);
     pendingConfirmPrepared = prepared;
     pendingConfirmProfit = totalsMap['diff'] ?? 0;
     pendingConfirmCount = (totalsMap['count'] ?? 0).toInt();
+    pendingConfirmFor = profitPartiesLabel(paste);
     lastDialog = DialogData(phase: SubmitPhase.confirm, title: 'تأكيد');
     _emit();
   }
@@ -1921,6 +1942,7 @@ class AppController extends ChangeNotifier {
     pendingConfirmPrepared = null;
     pendingConfirmProfit = 0;
     pendingConfirmCount = 0;
+    pendingConfirmFor = '';
     lastDialog = null;
     _persistDialog(null);
     _emit();

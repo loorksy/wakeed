@@ -10,7 +10,7 @@ import 'common.dart';
 class SettingsCard extends StatelessWidget {
   const SettingsCard({super.key});
 
-  static const _dense = InputDecoration(
+  static const dense = InputDecoration(
     isDense: true,
     contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
   );
@@ -18,36 +18,12 @@ class SettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
-    final showDebit = app.createTab != 'charge' && app.createTab != 'profit';
     return AppCard(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
       child: Column(
         children: [
           Row(
             children: [
-              if (showDebit) ...[
-                Expanded(
-                  flex: 2,
-                  child: _Box(
-                    label: 'المدين',
-                    child: InkWell(
-                      onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
-                      child: InputDecorator(
-                        decoration: _dense.copyWith(
-                          suffixIcon: const Icon(Icons.account_tree_outlined, size: 16),
-                          suffixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-                        child: Text(
-                          app.debitAccountLabel(),
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-              ],
               Expanded(
                 child: _Box(
                   label: 'التاريخ',
@@ -67,7 +43,7 @@ class SettingsCard extends StatelessWidget {
                       }
                     },
                     child: InputDecorator(
-                      decoration: _dense,
+                      decoration: dense,
                       child: Text(app.entryDate, style: const TextStyle(fontSize: 12)),
                     ),
                   ),
@@ -97,7 +73,7 @@ class SettingsCard extends StatelessWidget {
                     },
                     isExpanded: true,
                     isDense: true,
-                    decoration: _dense,
+                    decoration: dense,
                   ),
                 ),
               ),
@@ -127,7 +103,7 @@ class SettingsCard extends StatelessWidget {
                     onChanged: (v) => app.setCostCenter(v ?? ''),
                     isExpanded: true,
                     isDense: true,
-                    decoration: _dense,
+                    decoration: dense,
                   ),
                 ),
               ),
@@ -136,16 +112,6 @@ class SettingsCard extends StatelessWidget {
           const SizedBox(height: 2),
           Row(
             children: [
-              if (showDebit)
-                TextButton(
-                  onPressed: app.saveDebitDefault,
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('حفظ افتراضي', style: TextStyle(fontSize: 12)),
-                ),
               const Spacer(),
               _MiniSwitch(
                 label: 'مقابل',
@@ -159,6 +125,49 @@ class SettingsCard extends StatelessWidget {
                 onChanged: app.setIncludeCostCenter,
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DebitAccountField extends StatelessWidget {
+  const DebitAccountField({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('حساب المدين', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                InkWell(
+                  onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
+                  child: InputDecorator(
+                    decoration: SettingsCard.dense.copyWith(
+                      suffixIcon: const Icon(Icons.account_tree_outlined, size: 18),
+                      suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                    child: Text(
+                      app.debitAccountLabel(),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: app.saveDebitDefault,
+            child: const Text('حفظ افتراضي'),
           ),
         ],
       ),

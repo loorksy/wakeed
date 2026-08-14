@@ -104,41 +104,38 @@ void main() {
   });
 
   group('buildProfitJournalRows', () {
-    test('sends written amounts and settles profit on المدين', () {
+    test('sends exactly two written lines to Wakeed', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
         ],
       );
-      expect(rows.length, 3);
+      expect(rows.length, 2);
       expect(rows[0].account, '555');
       expect(rows[0].debit, '500');
       expect(rows[1].account, '9830');
       expect(rows[1].credit, '400');
-      expect(rows[2].balancing, true);
-      expect(rows[2].account, '555');
-      expect(rows[2].credit, '100');
+      expect(rows.any((r) => r.balancing), false);
       expect(profitPasteTotals([
         ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
       ])['diff'], 100);
+      expect(profitForLabel(100, 'احمد'), 'لصالح احمد');
     });
 
-    test('كسر settles as extra debit on المدين', () {
+    test('كسر keeps two written lines and labels على المدين', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '500', debit: '555', debitAmount: '400'),
         ],
       );
-      expect(rows.length, 3);
+      expect(rows.length, 2);
       expect(rows[0].debit, '400');
       expect(rows[1].credit, '500');
-      expect(rows[2].balancing, true);
-      expect(rows[2].account, '555');
-      expect(rows[2].debit, '100');
       expect(formatProfitSigned(-100), '100-');
+      expect(profitForLabel(-100, 'احمد'), 'على احمد');
     });
 
-    test('equal amounts have no settlement line', () {
+    test('equal amounts stay two lines', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '100', debit: '555', debitAmount: '100'),

@@ -404,6 +404,12 @@ String profitKindLabel(num diff) {
   return 'فرق';
 }
 
+String profitForLabel(num diff, String who) {
+  final name = who.trim();
+  if (name.isEmpty || diff.abs() <= 0.001) return '';
+  return diff < 0 ? 'على $name' : 'لصالح $name';
+}
+
 List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
   final rows = <JournalRow>[];
   for (var i = 0; i < items.length; i++) {
@@ -430,32 +436,6 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
       clientNote: note,
       groupKey: key,
     ));
-    final debitVal = num.tryParse(dAmt) ?? 0;
-    final creditVal = num.tryParse(cAmt) ?? 0;
-    final profit = debitVal - creditVal;
-    if (profit.abs() <= 0.001) continue;
-    // التسوية على حساب المدين نفسه: ربح له (دائن) أو كسر عليه (مدين).
-    if (profit > 0) {
-      rows.add(JournalRow(
-        account: item.debit.trim(),
-        description: name,
-        debit: '',
-        credit: formatProfitAmount(profit),
-        clientNote: note,
-        groupKey: key,
-        balancing: true,
-      ));
-    } else {
-      rows.add(JournalRow(
-        account: item.debit.trim(),
-        description: name,
-        debit: formatProfitAmount(-profit),
-        credit: '',
-        clientNote: note,
-        groupKey: key,
-        balancing: true,
-      ));
-    }
   }
   return rows;
 }

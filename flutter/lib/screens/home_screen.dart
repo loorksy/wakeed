@@ -194,6 +194,7 @@ class _BatchTabState extends State<BatchTab> {
               ),
             ],
           ),
+          const DebitAccountField(),
           const Text('البيان'),
           const SizedBox(height: 4),
           TextField(
@@ -332,6 +333,7 @@ class _EachTabState extends State<EachTab> {
               ),
             ],
           ),
+          const DebitAccountField(),
           const Text('البيان'),
           const SizedBox(height: 4),
           TextField(
@@ -430,6 +432,7 @@ class ManualTab extends StatelessWidget {
               Text('${app.manualEntries.length}', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
+          const DebitAccountField(),
           const SizedBox(height: 8),
           for (var i = 0; i < app.manualEntries.length; i++)
             _ManualEntryCard(key: ValueKey(app.manualEntries[i].id), index: i, entry: app.manualEntries[i]),
@@ -1100,17 +1103,40 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
               const SizedBox(width: 8),
               if (c > 0 || d > 0)
-                Text(
-                  '${profitKindLabel(profit)} ${formatProfitSigned(profit)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: profit > 0.001
-                        ? WakeedColors.green
-                        : profit < -0.001
-                            ? WakeedColors.err
-                            : WakeedColors.accent,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${profitKindLabel(profit)} ${formatProfitSigned(profit)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: profit > 0.001
+                            ? WakeedColors.green
+                            : profit < -0.001
+                                ? WakeedColors.err
+                                : WakeedColors.accent,
+                      ),
+                    ),
+                    if (profitForLabel(
+                      profit,
+                      nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : debitCtrl.text.trim(),
+                    ).isNotEmpty)
+                      Text(
+                        profitForLabel(
+                          profit,
+                          nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : debitCtrl.text.trim(),
+                        ),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: profit > 0.001
+                              ? WakeedColors.green
+                              : profit < -0.001
+                                  ? WakeedColors.err
+                                  : WakeedColors.accent,
+                        ),
+                      ),
+                  ],
                 ),
               const Spacer(),
               IconButton(

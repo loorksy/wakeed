@@ -137,6 +137,14 @@ class _ProfitConfirmSheet extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text('$count سندات', style: Theme.of(context).textTheme.bodySmall),
                       ],
+                      if (profitForLabel(diff, app.pendingConfirmFor).isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          profitForLabel(diff, app.pendingConfirmFor),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color),
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       Row(
                         children: [
