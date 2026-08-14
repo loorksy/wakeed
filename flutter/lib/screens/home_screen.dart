@@ -893,19 +893,29 @@ class _ProfitTabState extends State<ProfitTab> {
           const SizedBox(height: 8),
           SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'batch', label: Text('جماعي'), icon: Icon(Icons.groups_outlined, size: 16)),
-              ButtonSegment(value: 'each', label: Text('فردي'), icon: Icon(Icons.edit_note, size: 16)),
+              ButtonSegment(value: 'batch', label: Text('جماعي')),
+              ButtonSegment(value: 'split', label: Text('جماعي فردي')),
+              ButtonSegment(value: 'each', label: Text('فردي')),
             ],
-            selected: {app.profitMode},
+            selected: {app.profitMode == 'split' || app.profitMode == 'each' ? app.profitMode : 'batch'},
             onSelectionChanged: (v) => app.setProfitMode(v.first),
             showSelectedIcon: false,
-            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
           ),
           const SizedBox(height: 10),
-          if (app.profitMode == 'batch') ...[
+          if (app.profitMode != 'each') ...[
             Row(
               children: [
-                const Expanded(child: Text('لصق الدائن والمدين', style: TextStyle(fontWeight: FontWeight.w700))),
+                Expanded(
+                  child: Text(
+                    app.profitMode == 'split' ? 'لصق جماعي — سند منفصل لكل سطر' : 'لصق الدائن والمدين',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
                 TextButton(
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: profitSheetTemplate));
@@ -917,11 +927,21 @@ class _ProfitTabState extends State<ProfitTab> {
                 ),
               ],
             ),
+            if (app.profitMode == 'split') ...[
+              const SizedBox(height: 4),
+              Text(
+                'الصق كل السندات دفعة واحدة. عند الإنشاء يُسجَّل كل سطر سنداً منفصلاً في وكيد.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 8),
             const Text('البيان'),
             const SizedBox(height: 4),
             TextField(
               controller: notes,
-              decoration: const InputDecoration(hintText: 'ملاحظة السند'),
+              decoration: InputDecoration(
+                hintText: app.profitMode == 'split' ? 'ملاحظة تُضاف لكل سند' : 'ملاحظة السند',
+              ),
               onChanged: app.setNotesProfit,
             ),
             const SizedBox(height: 8),

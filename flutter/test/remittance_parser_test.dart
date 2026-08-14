@@ -151,5 +151,18 @@ void main() {
       expect(rows.length, 2);
       expect(rows.any((r) => r.balancing), false);
     });
+
+    test('each pasted row is its own voucher group', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '100', debit: '555', debitAmount: '120'),
+          ProfitPasteRow(name: 'ب', credit: '9830', creditAmount: '200', debit: '555', debitAmount: '250'),
+        ],
+      );
+      final groups = groupRowsByKey(rows);
+      expect(groups.length, 2);
+      expect(groups[0].name, 'ا');
+      expect(groups[1].name, 'ب');
+    });
   });
 }

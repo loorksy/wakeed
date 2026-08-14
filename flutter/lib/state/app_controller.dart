@@ -50,7 +50,7 @@ class AppController extends ChangeNotifier {
   List<ProfitEntry> profitEntries = [];
   String notesProfit = '';
   String tableProfit = '';
-  String profitMode = 'batch'; // batch | each
+  String profitMode = 'batch'; // batch | split | each
   num pendingConfirmProfit = 0;
   int pendingConfirmCount = 0;
   String pendingConfirmFor = '';
@@ -514,7 +514,7 @@ class AppController extends ChangeNotifier {
       }
       if (settings['notesProfit'] != null) notesProfit = settings['notesProfit'].toString();
       if (settings['tableProfit'] != null) tableProfit = settings['tableProfit'].toString();
-      if (settings['profitMode'] == 'each' || settings['profitMode'] == 'batch') {
+      if (settings['profitMode'] == 'each' || settings['profitMode'] == 'batch' || settings['profitMode'] == 'split') {
         profitMode = settings['profitMode'].toString();
       }
       if (settings['table'] != null) tableBatch = settings['table'].toString();
@@ -876,7 +876,11 @@ class AppController extends ChangeNotifier {
   }
 
   void setProfitMode(String mode) {
-    profitMode = mode == 'each' ? 'each' : 'batch';
+    profitMode = switch (mode) {
+      'each' => 'each',
+      'split' => 'split',
+      _ => 'batch',
+    };
     if (profitMode == 'each') ensureProfitEntries();
     scheduleSaveLocal();
     _emit();
@@ -1977,7 +1981,9 @@ class AppController extends ChangeNotifier {
       title: 'جارٍ الإنشاء...',
       message: profitMode == 'each'
           ? 'يتم الآن تسجيل سند ربحي منفصل لكل بطاقة. يرجى الانتظار.'
-          : 'يتم الآن تسجيل السند الربحي الجماعي في وكيد. يرجى الانتظار.',
+          : profitMode == 'split'
+              ? 'يتم الآن تسجيل سند ربحي منفصل لكل سطر. يرجى الانتظار.'
+              : 'يتم الآن تسجيل السند الربحي الجماعي في وكيد. يرجى الانتظار.',
     );
     _emit();
     try {
@@ -2048,7 +2054,7 @@ class AppController extends ChangeNotifier {
       resolved = {...resolved, ...await resolveRows(rebuilt.where((r) => missing.contains(normalizeAccountKey(r.account))).toList())};
     }
 
-    if (profitMode != 'each') {
+    if (profitMode == 'batch') {
       final body = buildJournal(
         rebuilt,
         resolved,
@@ -2090,7 +2096,9 @@ class AppController extends ChangeNotifier {
     var done = 0;
     final total = groups.length;
     await mapPool(groups, journalParallel, (group, _) async {
-      final notes = groupStatement(group, 'profit').isNotEmpty ? groupStatement(group, 'profit') : 'سند ربحي';
+      final notes = groupStatement(group, 'profit').isNotEmpty
+          ? groupStatement(group, 'profit')
+          : (notesProfit.trim().isNotEmpty ? notesProfit.trim() : 'سند ربحي');
       try {
         final body = buildJournal(group.rows, resolved, notes: notes, section: 'profit');
         final created = await enrichCreated(await postJournalWithRetry(body));
