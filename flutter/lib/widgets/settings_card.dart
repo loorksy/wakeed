@@ -111,36 +111,7 @@ class SettingsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: _AccountPick(
-                  label: 'مدين',
-                  value: app.debitAccountLabel(),
-                  color: WakeedColors.err,
-                  onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _AccountPick(
-                  label: 'دائن',
-                  value: app.creditAccountLabel(),
-                  color: WakeedColors.green,
-                  onTap: () => showAccountPicker(context, target: AccountPickTarget.defaultCredit()),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _AccountPick(
-                  label: 'طرف ثالث',
-                  value: app.thirdPartyAccountLabel(),
-                  color: WakeedColors.accent,
-                  onTap: () => showAccountPicker(context, target: AccountPickTarget.thirdParty()),
-                ),
-              ),
-            ],
-          ),
+          _AccountPickRow(app: app),
           const SizedBox(height: 2),
           Row(
             children: [
@@ -164,16 +135,67 @@ class SettingsCard extends StatelessWidget {
   }
 }
 
+class _AccountPickRow extends StatelessWidget {
+  const _AccountPickRow({required this.app});
+
+  final AppController app;
+
+  @override
+  Widget build(BuildContext context) {
+    final profit = app.createTab == 'profit';
+    final showDebit = profit ? app.profitMode == 'each' : true;
+    final showCredit = profit && app.profitMode == 'each';
+    final debitCode = app.preferredDebitCode().isNotEmpty ? app.preferredDebitCode() : app.debitAccount;
+    final creditCode = app.preferredCreditCode().isNotEmpty ? app.preferredCreditCode() : app.creditAccount;
+    final thirdCode = app.preferredThirdPartyCode();
+    final picks = <Widget>[
+      if (showDebit)
+        _AccountPick(
+          label: 'مدين',
+          code: debitCode,
+          name: app.chartAccountName(debitCode),
+          color: WakeedColors.err,
+          onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
+        ),
+      if (showCredit)
+        _AccountPick(
+          label: 'دائن',
+          code: creditCode,
+          name: app.chartAccountName(creditCode),
+          color: WakeedColors.green,
+          onTap: () => showAccountPicker(context, target: AccountPickTarget.defaultCredit()),
+        ),
+      _AccountPick(
+        label: 'طرف ثالث',
+        code: thirdCode,
+        name: app.chartAccountName(thirdCode),
+        color: WakeedColors.accent,
+        onTap: () => showAccountPicker(context, target: AccountPickTarget.thirdParty()),
+      ),
+    ];
+    return Row(
+      children: [
+        for (var i = 0; i < picks.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(child: picks[i]),
+        ],
+      ],
+    );
+  }
+}
+
 class _AccountPick extends StatelessWidget {
   const _AccountPick({
     required this.label,
-    required this.value,
+    required this.code,
+    required this.name,
     required this.color,
     required this.onTap,
   });
 
   final String label;
-  final String value;
+  final String code;
+  final String name;
   final Color color;
   final VoidCallback onTap;
 
@@ -182,14 +204,14 @@ class _AccountPick extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+        Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, height: 1.1)),
         const SizedBox(height: 2),
         InkWell(
           onTap: onTap,
           child: InputDecorator(
             decoration: SettingsCard.dense.copyWith(
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              contentPadding: const EdgeInsets.fromLTRB(6, 4, 2, 4),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: color.withValues(alpha: 0.55)),
@@ -198,15 +220,34 @@ class _AccountPick extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: color),
               ),
-              suffixIcon: Icon(Icons.account_tree_outlined, size: 16, color: color),
-              suffixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              suffixIcon: Icon(Icons.account_tree_outlined, size: 13, color: color),
+              suffixIconConstraints: const BoxConstraints(minWidth: 22, minHeight: 22),
             ),
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
-            ),
+            child: code.isEmpty
+                ? Text(
+                    'اختر',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: color.withValues(alpha: 0.55), fontSize: 9, height: 1.15),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        code,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700, height: 1.1),
+                      ),
+                      if (name.isNotEmpty)
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 8, fontWeight: FontWeight.w500, height: 1.15),
+                        ),
+                    ],
+                  ),
           ),
         ),
       ],

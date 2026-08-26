@@ -1489,7 +1489,7 @@ class AppController extends ChangeNotifier {
   }
 
   void setLedgerKindFilter(String v) {
-    ledgerKind = v;
+    ledgerKind = v == 'charge' ? '' : v;
     ledgerPage = 0;
     _emit();
   }
@@ -1507,7 +1507,7 @@ class AppController extends ChangeNotifier {
   }
 
   void setTab(String tab) {
-    createTab = tab;
+    createTab = tab == 'charge' ? 'batch' : tab;
     if (tab == 'profit') {
       ensureProfitEntries();
       unawaited(hydrateProfitAccounts([
@@ -2433,7 +2433,7 @@ class AppController extends ChangeNotifier {
     final q = ledgerSearch.trim().toLowerCase();
     final from = ledgerFrom.trim();
     final to = ledgerTo.trim();
-    final kind = ledgerKind.trim();
+    final kind = ledgerKind.trim() == 'charge' ? '' : ledgerKind.trim();
     final rows = ownerLedger().where((row) {
       final date = row.entryDate.length >= 10 ? row.entryDate.substring(0, 10) : row.entryDate;
       if (from.isNotEmpty && date.isNotEmpty && date.compareTo(from) < 0) return false;

@@ -85,7 +85,7 @@ class _AccountNameFieldState extends State<AccountNameField> {
     return TextField(
       controller: _display,
       focusNode: _focus,
-      style: TextStyle(fontSize: 12, height: 1.2, color: color),
+      style: TextStyle(fontSize: 10, height: 1.15, color: color),
       decoration: partyFieldDecoration(
         debit: widget.debit,
         base: dense,

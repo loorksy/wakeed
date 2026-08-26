@@ -24,9 +24,8 @@ class HomeScreen extends StatelessWidget {
     final index = switch (app.createTab) {
       'each' => 1,
       'manual' => 2,
-      'charge' => 3,
-      'profit' => 4,
-      'ledger' => 5,
+      'profit' => 3,
+      'ledger' => 4,
       _ => 0,
     };
     return Scaffold(
@@ -92,7 +91,7 @@ class HomeScreen extends StatelessWidget {
           TextButton(onPressed: app.logout, child: const Text('خروج')),
         ],
       ),
-      body: index == 5
+      body: index == 4
           ? const LedgerTab()
           : ListView(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 20),
@@ -102,8 +101,7 @@ class HomeScreen extends StatelessWidget {
                 if (index == 0) const BatchTab(),
                 if (index == 1) const EachTab(),
                 if (index == 2) const ManualTab(),
-                if (index == 3) const ChargeTab(),
-                if (index == 4) const ProfitTab(),
+                if (index == 3) const ProfitTab(),
               ],
             ),
       bottomNavigationBar: NavigationBarTheme(
@@ -119,13 +117,12 @@ class HomeScreen extends StatelessWidget {
         child: NavigationBar(
           selectedIndex: index,
           onDestinationSelected: (i) {
-            app.setTab(['batch', 'each', 'manual', 'charge', 'profit', 'ledger'][i]);
+            app.setTab(['batch', 'each', 'manual', 'profit', 'ledger'][i]);
           },
           destinations: [
             const NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'جماعي'),
             const NavigationDestination(icon: Icon(Icons.person_outline), label: 'لكل عميل'),
             const NavigationDestination(icon: Icon(Icons.edit_note), label: 'فردي'),
-            const NavigationDestination(icon: Icon(Icons.local_shipping_outlined), label: 'شحن'),
             const NavigationDestination(icon: Icon(Icons.trending_up), label: 'ربحي'),
             NavigationDestination(
               icon: Badge(
@@ -572,247 +569,6 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
                 tooltip: 'اختر',
                 visualDensity: VisualDensity.compact,
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.credit(widget.entry.id)),
-                icon: const Icon(Icons.account_tree_outlined, color: WakeedColors.green),
-              ),
-            ],
-          ),
-          if (mixed && amt > 0) ...[
-            const SizedBox(height: 8),
-            ProfitFxBar(
-              diff: roundMoney(debitBase - creditBase),
-              creditBase: creditBase,
-              debitBase: debitBase,
-              symbol: app.baseCurrencyQuote().symbol,
-              compact: true,
-            ),
-          ],
-          const SizedBox(height: 6),
-          TextField(
-            controller: noteCtrl,
-            decoration: const InputDecoration(hintText: 'البيان'),
-            onChanged: (_) => _sync(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ChargeTab extends StatelessWidget {
-  const ChargeTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppController>();
-    app.ensureChargeEntries();
-    final rows = app.chargeRows();
-    final groups = groupCustomerRows(rows);
-    final tableRows = <List<String>>[];
-    var lineNo = 0;
-    for (var gi = 0; gi < groups.length; gi++) {
-      for (final row in groups[gi].rows) {
-        lineNo += 1;
-        tableRows.add([
-          '${gi + 1}',
-          '$lineNo',
-          app.composeNote(row.description, row.clientNote),
-          row.account,
-          app.thirdPartyCell(row),
-          formatJournalAmount(row, debit: true),
-          formatJournalAmount(row, debit: false),
-          app.resolvedLabel(app.resolvedCharge, row.account),
-        ]);
-      }
-    }
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(child: Text('شحن', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
-              Text('${app.chargeEntries.length}', style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-          const SizedBox(height: 6),
-          for (var i = 0; i < app.chargeEntries.length; i++)
-            _ChargeEntryCard(key: ValueKey(app.chargeEntries[i].id), index: i, entry: app.chargeEntries[i]),
-          OutlinedButton(onPressed: app.addChargeEntry, child: const Text('+ سند')),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: app.busy ? null : app.previewCharge,
-                  child: const Text('معاينة'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  onPressed: app.submitJob.active ? null : app.submitCharge,
-                  child: const Text('تسجيل'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          JournalFxSummary(
-            rows: rows,
-            symbol: app.baseCurrencyQuote().symbol,
-            leading: [
-              StatChip(label: 'سندات', value: '${groups.length}'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          PreviewTable(
-            columns: const ['سند', '#', 'البيان', 'حساب', 'طرف ثالث', 'مدين', 'دائن', 'محلول'],
-            rows: tableRows,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChargeEntryCard extends StatefulWidget {
-  const _ChargeEntryCard({super.key, required this.index, required this.entry});
-
-  final int index;
-  final ManualEntry entry;
-
-  @override
-  State<_ChargeEntryCard> createState() => _ChargeEntryCardState();
-}
-
-class _ChargeEntryCardState extends State<_ChargeEntryCard> {
-  late final TextEditingController nameCtrl;
-  late final TextEditingController amountCtrl;
-  late final TextEditingController debitCtrl;
-  late final TextEditingController creditCtrl;
-  late final TextEditingController noteCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    nameCtrl = TextEditingController(text: widget.entry.name);
-    amountCtrl = TextEditingController(text: widget.entry.amount);
-    debitCtrl = TextEditingController(text: widget.entry.debit);
-    creditCtrl = TextEditingController(text: widget.entry.credit);
-    noteCtrl = TextEditingController(text: widget.entry.note);
-  }
-
-  @override
-  void didUpdateWidget(covariant _ChargeEntryCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (debitCtrl.text != widget.entry.debit) debitCtrl.text = widget.entry.debit;
-    if (creditCtrl.text != widget.entry.credit) creditCtrl.text = widget.entry.credit;
-    if (nameCtrl.text != widget.entry.name && widget.entry.name.isEmpty) nameCtrl.clear();
-    if (amountCtrl.text != widget.entry.amount && widget.entry.amount.isEmpty) amountCtrl.clear();
-    if (noteCtrl.text != widget.entry.note && widget.entry.note.isEmpty) noteCtrl.clear();
-  }
-
-  @override
-  void dispose() {
-    nameCtrl.dispose();
-    amountCtrl.dispose();
-    debitCtrl.dispose();
-    creditCtrl.dispose();
-    noteCtrl.dispose();
-    super.dispose();
-  }
-
-  void _sync() {
-    widget.entry
-      ..name = nameCtrl.text
-      ..amount = amountCtrl.text
-      ..debit = debitCtrl.text
-      ..debitRate = ''
-      ..credit = creditCtrl.text
-      ..creditRate = ''
-      ..note = noteCtrl.text;
-    context.read<AppController>().updateChargeEntry(widget.entry);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppController>();
-    final debitQ = app.currencyQuoteForAccount(debitCtrl.text);
-    final creditQ = app.currencyQuoteForAccount(creditCtrl.text);
-    final amt = num.tryParse(cleanAmount(amountCtrl.text)) ?? 0;
-    final creditBase = amountToBaseFromQuote(amt, creditQ);
-    final debitBase = amountToBaseFromQuote(amountFromBase(creditBase, debitQ.isBase ? 1 : debitQ.hawalaRate), debitQ);
-    final mixed = !creditQ.isBase || !debitQ.isBase;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700))),
-              IconButton(
-                tooltip: 'حذف',
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                padding: EdgeInsets.zero,
-                onPressed: app.chargeEntries.length > 1 ? () => app.removeChargeEntry(widget.entry.id) : null,
-                icon: const Icon(Icons.close, size: 18),
-              ),
-            ],
-          ),
-          TextField(
-            controller: nameCtrl,
-            decoration: const InputDecoration(hintText: 'الاسم'),
-            onChanged: (_) => _sync(),
-          ),
-          const SizedBox(height: 6),
-          FxAmountField(
-            controller: amountCtrl,
-            symbol: creditQ.badge.isNotEmpty ? creditQ.badge : debitQ.badge,
-            labelText: 'المبلغ',
-            hintText: '1500',
-            onChanged: (_) => _sync(),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: AccountNameField(
-                  controller: debitCtrl,
-                  fallbackLabel: 'الحساب',
-                  onChanged: _sync,
-                  debit: true,
-                ),
-              ),
-              IconButton(
-                tooltip: 'اختر المدين',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => showAccountPicker(context, target: AccountPickTarget.chargeDebit(widget.entry.id)),
-                icon: const Icon(Icons.account_tree_outlined, color: WakeedColors.err),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: AccountNameField(
-                  controller: creditCtrl,
-                  fallbackLabel: 'الحساب',
-                  onChanged: _sync,
-                ),
-              ),
-              IconButton(
-                tooltip: 'اختر الدائن',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => showAccountPicker(context, target: AccountPickTarget.chargeCredit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, color: WakeedColors.green),
               ),
             ],
@@ -1346,13 +1102,14 @@ class LedgerTab extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: app.ledgerKind,
+                value: const {'', 'batch', 'each', 'profit', 'synced'}.contains(app.ledgerKind)
+                    ? app.ledgerKind
+                    : '',
                 decoration: const InputDecoration(labelText: 'النوع'),
                 items: const [
                   DropdownMenuItem(value: '', child: Text('الكل')),
                   DropdownMenuItem(value: 'batch', child: Text('جماعي')),
                   DropdownMenuItem(value: 'each', child: Text('لكل عميل')),
-                  DropdownMenuItem(value: 'charge', child: Text('شحن')),
                   DropdownMenuItem(value: 'profit', child: Text('ربحي')),
                   DropdownMenuItem(value: 'synced', child: Text('متزامن')),
                 ],
