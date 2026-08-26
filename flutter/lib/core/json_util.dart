@@ -66,13 +66,18 @@ bool isPostableAccount(dynamic acc) {
   return true;
 }
 
-List<dynamic> flattenAccounts(dynamic nodes, [List<dynamic>? out]) {
+List<dynamic> flattenAccounts(dynamic nodes, [List<dynamic>? out, dynamic parent]) {
   final result = out ?? <dynamic>[];
   for (final node in (nodes is List ? nodes : const [])) {
     if (node is! Map) continue;
+    if (parent is Map) {
+      node['_parentName'] ??= accountNameOf(parent);
+      node['_parentCode'] ??= pickAccountCode(parent);
+      node['_parentId'] ??= pickId(parent);
+    }
     final children = node['Children'] ?? node['children'] ?? [];
     if (isPostableAccount(node)) result.add(node);
-    if (children is List && children.isNotEmpty) flattenAccounts(children, result);
+    if (children is List && children.isNotEmpty) flattenAccounts(children, result, node);
   }
   return result;
 }
@@ -426,6 +431,102 @@ AccountThirdParty pickAccountThirdParty(dynamic acc) {
   }
   if (party.matchesAccount(acc)) return const AccountThirdParty();
   return party;
+}
+
+bool isRevenueName(String text) {
+  final t = text.trim();
+  if (t.isEmpty) return false;
+  if (RegExp(r'مصروف|نفقات|تكلفة|expense|cogs', caseSensitive: false).hasMatch(t)) return false;
+  return RegExp(
+    r'الإيرادات|الايرادات|إيرادات|ايرادات|إيراد|ايراد|\brevenues?\b|\bincomes?\b',
+    caseSensitive: false,
+  ).hasMatch(t);
+}
+
+String accountClassBlob(dynamic acc) {
+  if (acc is! Map) return '';
+  return [
+    accountNameOf(acc),
+    pickAccountCode(acc),
+    acc['_parentName'],
+    acc['_parentCode'],
+    acc['ParentName'],
+    acc['parentName'],
+    acc['MainAccountName'],
+    acc['mainAccountName'],
+    acc['FinalAccountName'],
+    acc['finalAccountName'],
+    acc['FinalAccount'],
+    acc['finalAccount'],
+    acc['AccountTypeName'],
+    acc['accountTypeName'],
+    acc['AccountType'],
+    acc['accountType'],
+    acc['Classification'],
+    acc['classification'],
+    acc['FinancialStatementType'],
+    acc['financialStatementType'],
+    acc['ReportType'],
+    acc['reportType'],
+  ].map((v) => (v ?? '').toString()).join(' ');
+}
+
+bool isRevenueClassified(dynamic acc) => isRevenueName(accountClassBlob(acc));
+
+int revenueProfitScore(dynamic acc) {
+  final n = accountNameOf(acc);
+  if (RegExp(r'أرباح\s*الحوالات|ارباح\s*الحوالات').hasMatch(n)) return 100;
+  if (RegExp(r'(ربح|أرباح|ارباح).*(حوال)|حوال.*(ربح|أرباح|ارباح)').hasMatch(n)) return 80;
+  if (n.contains('عمولة')) return 55;
+  if (RegExp(r'أرباح|ارباح').hasMatch(n)) return 40;
+  if (n.contains('ربح')) return 30;
+  if (isRevenueName(n)) return 10;
+  return 0;
+}
+
+List<dynamic> collectRevenueLeaves(dynamic nodes, {bool underRevenue = false}) {
+  final out = <dynamic>[];
+  for (final node in asList(nodes)) {
+    if (node is! Map) continue;
+    final name = accountNameOf(node);
+    final here = underRevenue || isRevenueName(name) || isRevenueClassified(node);
+    final children = node['Children'] ?? node['children'];
+    if (children is List && children.isNotEmpty) {
+      out.addAll(collectRevenueLeaves(children, underRevenue: here));
+    } else if (here && isPostableAccount(node)) {
+      out.add(node);
+    }
+  }
+  return out;
+}
+
+/// Leaf account under Wakeed chart branch فرع الإيرادات — never a hardcoded default.
+AccountThirdParty pickRevenueProfitAccount(Iterable<dynamic> accounts, {dynamic tree}) {
+  var pool = collectRevenueLeaves(tree);
+  if (pool.isEmpty) {
+    pool = [
+      for (final acc in accounts)
+        if (isPostableAccount(acc) && isRevenueClassified(acc)) acc,
+    ];
+  }
+  if (pool.isEmpty) {
+    pool = [
+      for (final acc in accounts)
+        if (isPostableAccount(acc) && revenueProfitScore(acc) >= 30) acc,
+    ];
+  }
+  if (pool.isEmpty) return const AccountThirdParty();
+  pool.sort((a, b) {
+    final byScore = revenueProfitScore(b).compareTo(revenueProfitScore(a));
+    if (byScore != 0) return byScore;
+    return pickAccountCode(a).compareTo(pickAccountCode(b));
+  });
+  final best = pool.first;
+  return AccountThirdParty(
+    id: pickId(best),
+    code: pickAccountCode(best),
+    name: accountNameOf(best),
+  );
 }
 
 /// Unwrap Wakeed `{ data: { ... } }` / list-of-one payloads into the account object.

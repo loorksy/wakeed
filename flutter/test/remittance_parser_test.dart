@@ -166,7 +166,7 @@ void main() {
       expect(groups[1].name, 'ب');
     });
 
-    test('does not post profit to the creditor; third party of the account owner is used', () {
+    test('does not post profit to the creditor; chart revenue account is used', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
@@ -174,31 +174,23 @@ void main() {
       );
       final applied = applyProfitThirdParty(
         rows,
-        thirdPartyOf: (code) {
-          if (code == '9830') {
-            return const AccountThirdParty(id: 'tp-1', code: '4001', name: 'أرباح الحوالات');
-          }
-          return const AccountThirdParty();
-        },
-        ownerIdOf: (code) => code == '9830' ? 'owner-9830' : '',
+        profitAccount: const AccountThirdParty(id: 'rev-1', code: '4001', name: 'أرباح الحوالات'),
       );
       expect(applied.length, 3);
       expect(applied[1].account, '9830');
       expect(applied[1].balancing, false);
+      expect(applied[1].correspondingIdOverride, '');
       final profitLine = applied[2];
       expect(profitLine.balancing, true);
       expect(profitLine.account, isNot('9830'));
       expect(profitLine.account, '4001');
-      expect(profitLine.accountIdOverride, 'tp-1');
-      expect(profitLine.correspondingIdOverride, 'tp-1');
+      expect(profitLine.accountIdOverride, 'rev-1');
+      expect(profitLine.correspondingIdOverride, '');
       expect(profitLine.credit, '100');
       expect(profitLine.thirdPartyName, contains('أرباح'));
-      expect(applied[0].correspondingIdOverride, 'tp-1');
-      expect(applied[1].correspondingIdOverride, 'tp-1');
-      expect(applied[1].account, '9830');
     });
 
-    test('does not treat the creditor account as the profit third party', () {
+    test('does not treat the creditor account as the profit revenue account', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
@@ -206,12 +198,7 @@ void main() {
       );
       final applied = applyProfitThirdParty(
         rows,
-        thirdPartyOf: (code) {
-          if (code == '9830') {
-            return const AccountThirdParty(id: 'acc-9830', code: '9830', name: 'أحمد');
-          }
-          return const AccountThirdParty();
-        },
+        profitAccount: const AccountThirdParty(id: 'acc-9830', code: '9830', name: 'أحمد'),
       );
       expect(applied[2].balancing, true);
       expect(applied[2].account, '555');
@@ -220,7 +207,7 @@ void main() {
       expect(applied[2].thirdPartyName, '');
     });
 
-    test('keeps profit on the debit account when Wakeed has no third party', () {
+    test('keeps profit on the debit account when the chart has no revenue account', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
@@ -228,8 +215,7 @@ void main() {
       );
       final applied = applyProfitThirdParty(
         rows,
-        thirdPartyOf: (_) => const AccountThirdParty(),
-        ownerIdOf: (_) => 'owner-555',
+        profitAccount: const AccountThirdParty(),
       );
       expect(applied[2].account, '555');
       expect(applied[2].accountIdOverride, '');

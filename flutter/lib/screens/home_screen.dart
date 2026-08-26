@@ -915,8 +915,8 @@ class _ProfitTabState extends State<ProfitTab> {
           rows[i].balancing
               ? (rows[i].thirdPartyName.isNotEmpty
                   ? rows[i].thirdPartyName
-                  : app.thirdPartyLabelFor(rows[i].account))
-              : app.thirdPartyLabelFor(rows[i].account),
+                  : app.chartRevenueProfit.label)
+              : '',
           _profitAmountCell(rows[i].debit, rows[i]),
           _profitAmountCell(rows[i].credit, rows[i]),
           app.resolvedLabel(app.resolvedProfit, rows[i].account),
@@ -927,6 +927,13 @@ class _ProfitTabState extends State<ProfitTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('سند ربحي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(
+            app.chartRevenueProfit.label.isNotEmpty
+                ? 'حساب الربح من فرع الإيرادات: ${app.chartRevenueProfit.label}'
+                : 'يُجلب حساب الربح تلقائياً من فرع الإيرادات في دليل الحسابات.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 8),
           SegmentedButton<String>(
             segments: const [
@@ -1002,11 +1009,14 @@ class _ProfitTabState extends State<ProfitTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً والطرف الثالث من وكيد.',
+              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً، وحساب الربح يُجلب من فرع الإيرادات.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
-            const DefaultAccountsCard(title: 'حسابات افتراضية — سند ربحي فردي'),
+            const DefaultAccountsCard(
+              title: 'حسابات افتراضية — سند ربحي فردي',
+              subtitle: 'يُعبَّأ المدين والدائن تلقائياً. حساب الربح يُجلب من فرع الإيرادات في دليل الحسابات.',
+            ),
             const SizedBox(height: 8),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -1291,7 +1301,6 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 ),
               ),
             ),
-          ThirdPartyCaption(accountCode: creditCtrl.text),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1328,7 +1337,6 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 ),
               ),
             ),
-          ThirdPartyCaption(accountCode: debitCtrl.text),
           if (c > 0 || d > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(

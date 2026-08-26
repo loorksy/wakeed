@@ -235,9 +235,14 @@ class CreditAccountField extends StatelessWidget {
 }
 
 class DefaultAccountsCard extends StatelessWidget {
-  const DefaultAccountsCard({super.key, this.title = 'حسابات افتراضية — سند فردي'});
+  const DefaultAccountsCard({
+    super.key,
+    this.title = 'حسابات افتراضية — سند فردي',
+    this.subtitle = 'يُعبَّأ المدين والدائن تلقائياً في السند الجديد، ويظهر الطرف الثالث من وكيد.',
+  });
 
   final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +261,7 @@ class DefaultAccountsCard extends StatelessWidget {
             Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
             Text(
-              'يُعبَّأ المدين والدائن تلقائياً في السند الجديد، ويظهر الطرف الثالث من وكيد.',
+              subtitle,
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),

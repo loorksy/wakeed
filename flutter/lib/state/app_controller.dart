@@ -71,6 +71,8 @@ class AppController extends ChangeNotifier {
   dynamic sampleDetail;
   dynamic sampleEntry;
   List<dynamic> accounts = [];
+  List<dynamic> accountTree = [];
+  AccountThirdParty chartRevenueProfit = const AccountThirdParty();
   Map<String, String> debitDefaults = {};
   Map<String, String> creditDefaults = {};
   final Set<String> _hydratedAccountCodes = {};
@@ -612,7 +614,8 @@ class AppController extends ChangeNotifier {
       sampleDetail = (details is List && details.isNotEmpty) ? details.first : null;
       accountCache.clear();
       _hydratedAccountCodes.clear();
-      accounts = flattenAccounts(asList(accountsRaw));
+      accountTree = asList(accountsRaw);
+      accounts = flattenAccounts(accountTree);
       if (accounts.isEmpty) {
         await loadChartAccounts();
       } else {
@@ -623,6 +626,8 @@ class AppController extends ChangeNotifier {
         }
         fillDebitAccounts();
         fillCreditAccounts();
+        _refreshChartRevenueProfit();
+        unawaited(_loadAccountTree());
       }
       await _fillMissingCurrencies();
 
@@ -721,7 +726,10 @@ class AppController extends ChangeNotifier {
       try {
         final data = await _api('GET', path);
         list = flattenAccounts(asList(data));
-        if (list.isNotEmpty) break;
+        if (list.isNotEmpty) {
+          if (accountTree.isEmpty) accountTree = asList(data);
+          break;
+        }
       } catch (_) {}
     }
     list.sort((a, b) => pickAccountCode(a).compareTo(pickAccountCode(b)));
@@ -732,6 +740,48 @@ class AppController extends ChangeNotifier {
     }
     fillDebitAccounts();
     fillCreditAccounts();
+    _refreshChartRevenueProfit();
+    unawaited(_loadAccountTree());
+  }
+
+  Future<void> _loadAccountTree() async {
+    const attempts = [
+      '/api/NormalAccount',
+      '/api/NormalAccount/GetTree',
+      '/api/NormalAccount?leafNormalAccounts=false',
+    ];
+    for (final path in attempts) {
+      try {
+        final data = await _api('GET', path);
+        final list = asList(data);
+        final hasChildren = list.any((n) {
+          if (n is! Map) return false;
+          final children = n['Children'] ?? n['children'];
+          return children is List && children.isNotEmpty;
+        });
+        if (!hasChildren && list.isEmpty) continue;
+        if (hasChildren) accountTree = list;
+        final flat = flattenAccounts(hasChildren ? list : accountTree);
+        if (flat.isNotEmpty) {
+          flat.sort((a, b) => pickAccountCode(a).compareTo(pickAccountCode(b)));
+          accounts = flat;
+          for (final acc in flat) {
+            final code = pickAccountCode(acc);
+            if (code.isNotEmpty) accountCache[code] = acc;
+          }
+          fillDebitAccounts();
+          fillCreditAccounts();
+        }
+        _refreshChartRevenueProfit();
+        if (hasChildren || !chartRevenueProfit.isEmpty) return;
+      } catch (_) {}
+    }
+    _refreshChartRevenueProfit();
+  }
+
+  void _refreshChartRevenueProfit() {
+    chartRevenueProfit = pickRevenueProfitAccount(accounts, tree: accountTree);
+    _emit();
   }
 
   String preferredDebitCode() {
@@ -811,25 +861,9 @@ class AppController extends ChangeNotifier {
   }
 
   String profitBeneficiaryLabel({String credit = '', String debit = ''}) {
-    for (final code in [credit, debit]) {
-      final acc = _accountByCode(normalizeAccountKey(code));
-      final party = pickAccountThirdParty(acc);
-      if (party.isEmpty ||
-          party.matchesAccount(acc) ||
-          party.matchesAccountCode(credit) ||
-          party.matchesAccountCode(debit)) {
-        continue;
-      }
-      var label = party.label;
-      if (label.isEmpty) label = thirdPartyLabelFor(code);
-      if (label.isEmpty) continue;
-      if (acc != null &&
-          (label == accountLabel(acc) || label == accountNameOf(acc) || label == pickAccountCode(acc))) {
-        continue;
-      }
-      return label;
-    }
-    return '';
+    final tp = chartRevenueProfit;
+    if (tp.isEmpty || tp.matchesAccountCode(credit) || tp.matchesAccountCode(debit)) return '';
+    return tp.label;
   }
 
   Future<dynamic> hydrateAccount(String code, {bool force = false}) async {
@@ -1639,8 +1673,7 @@ class AppController extends ChangeNotifier {
   List<JournalRow> profitRows() {
     return applyProfitThirdParty(
       buildProfitJournalRows(currentProfitPaste()),
-      thirdPartyOf: thirdPartyForAccountCode,
-      ownerIdOf: accountIdForCode,
+      profitAccount: chartRevenueProfit,
     );
   }
 
@@ -1933,36 +1966,6 @@ class AppController extends ChangeNotifier {
     return found.isEmpty ? null : found.first;
   }
 
-  String _profitWakeedThirdPartyId(JournalRow row, List<JournalRow> rows, Map<String, dynamic> resolved) {
-    JournalRow? credit;
-    JournalRow? debit;
-    for (final r in rows) {
-      if (r.groupKey != row.groupKey || r.balancing) continue;
-      if (credit == null && r.credit.isNotEmpty) credit = r;
-      if (debit == null && r.debit.isNotEmpty) debit = r;
-    }
-    final skipIds = <String>{
-      pickId(resolved[normalizeAccountKey(credit?.account ?? '')] ?? _accountByCode(credit?.account ?? '')),
-      pickId(resolved[normalizeAccountKey(debit?.account ?? '')] ?? _accountByCode(debit?.account ?? '')),
-    }..removeWhere((id) => id.isEmpty);
-    for (final code in [
-      if (credit != null) credit.account,
-      if (debit != null) debit.account,
-      row.account,
-    ]) {
-      final acc = resolved[normalizeAccountKey(code)] ?? _accountByCode(code);
-      final tp = pickAccountThirdParty(acc);
-      if (tp.id.isEmpty || skipIds.contains(tp.id)) continue;
-      if (tp.matchesAccount(acc) ||
-          tp.matchesAccountCode(credit?.account ?? '') ||
-          tp.matchesAccountCode(debit?.account ?? '')) {
-        continue;
-      }
-      return tp.id;
-    }
-    return '';
-  }
-
   Map<String, dynamic> buildJournal(
     List<JournalRow> rows,
     Map<String, dynamic> resolved, {
@@ -1985,7 +1988,7 @@ class AppController extends ChangeNotifier {
       if (row.correspondingIdOverride.isNotEmpty) {
         correspondingId = row.correspondingIdOverride;
       } else if (section == 'profit') {
-        correspondingId = _profitWakeedThirdPartyId(row, rows, resolved);
+        correspondingId = '';
       } else if (useOpposite && opposite != null) {
         correspondingId = pickId(resolved[normalizeAccountKey(opposite.account)]);
       }
@@ -2480,8 +2483,7 @@ class AppController extends ChangeNotifier {
         await hydrateProfitAccounts(workingRows.map((r) => r.account));
         workingRows = applyProfitThirdParty(
           buildProfitJournalRows(currentProfitPaste()),
-          thirdPartyOf: thirdPartyForAccountCode,
-          ownerIdOf: accountIdForCode,
+          profitAccount: chartRevenueProfit,
         );
         final missing = workingRows
             .map((r) => normalizeAccountKey(r.account))
@@ -2597,9 +2599,7 @@ class AppController extends ChangeNotifier {
   }
 
   String profitPartyLabel(ProfitPasteRow row) {
-    final fromWakeed = profitBeneficiaryLabel(credit: row.credit, debit: row.debit);
-    if (fromWakeed.isNotEmpty) return fromWakeed;
-    return '';
+    return profitBeneficiaryLabel(credit: row.credit, debit: row.debit);
   }
 
   String profitPartiesLabel(List<ProfitPasteRow> paste) {
@@ -2699,8 +2699,7 @@ class AppController extends ChangeNotifier {
     final paste = [for (final group in pending) _profitPasteFromGroup(group)];
     final rebuilt = applyProfitThirdParty(
       buildProfitJournalRows(paste),
-      thirdPartyOf: thirdPartyForAccountCode,
-      ownerIdOf: accountIdForCode,
+      profitAccount: chartRevenueProfit,
     );
     var resolved = Map<String, dynamic>.from(prepared.resolved);
     final missing = rebuilt

@@ -740,14 +740,13 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
   return rows;
 }
 
-/// Directs the profit/كسر line to the third party assigned on the account
-/// owner in Wakeed (صاحب الحساب = the credit account), never to the creditor.
+/// Posts the profit/كسر line to the chart account under فرع الإيرادات.
+/// Does not invent a default party and never uses the creditor.
 List<JournalRow> applyProfitThirdParty(
   List<JournalRow> rows, {
-  required AccountThirdParty Function(String accountCode) thirdPartyOf,
-  String Function(String accountCode)? ownerIdOf,
+  AccountThirdParty profitAccount = const AccountThirdParty(),
 }) {
-  if (rows.isEmpty) return rows;
+  if (rows.isEmpty || profitAccount.isEmpty) return rows;
   final groups = groupRowsByKey(rows);
   final out = <JournalRow>[];
   for (final group in groups) {
@@ -758,27 +757,16 @@ List<JournalRow> applyProfitThirdParty(
       if (credit == null && row.credit.isNotEmpty) credit = row;
       if (debit == null && row.debit.isNotEmpty) debit = row;
     }
-    AccountThirdParty tp = const AccountThirdParty();
-    for (final row in [credit, debit]) {
-      if (row == null) continue;
-      final found = thirdPartyOf(row.account);
-      if (found.isEmpty) continue;
-      if (found.matchesAccountCode(credit?.account ?? '') ||
-          found.matchesAccountCode(debit?.account ?? '')) {
-        continue;
-      }
-      tp = found;
-      break;
-    }
+    final tp = (profitAccount.matchesAccountCode(credit?.account ?? '') ||
+            profitAccount.matchesAccountCode(debit?.account ?? ''))
+        ? const AccountThirdParty()
+        : profitAccount;
     for (final row in group.rows) {
       final copy = row.copy();
-      if (!tp.isEmpty) {
-        if (tp.id.isNotEmpty) copy.correspondingIdOverride = tp.id;
+      if (!tp.isEmpty && row.balancing) {
+        if (tp.code.isNotEmpty) copy.account = tp.code;
+        if (tp.id.isNotEmpty) copy.accountIdOverride = tp.id;
         copy.thirdPartyName = tp.label;
-        if (row.balancing) {
-          if (tp.code.isNotEmpty) copy.account = tp.code;
-          if (tp.id.isNotEmpty) copy.accountIdOverride = tp.id;
-        }
       }
       out.add(copy);
     }

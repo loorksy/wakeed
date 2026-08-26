@@ -155,6 +155,60 @@ void main() {
     });
   });
 
+  group('pickRevenueProfitAccount', () {
+    test('picks أرباح الحوالات under فرع الإيرادات', () {
+      final tree = [
+        {
+          'AccountCode': '4',
+          'AccountName': 'الإيرادات',
+          'IsParent': true,
+          'Children': [
+            {
+              'Id': 'rev-other',
+              'AccountCode': '4000',
+              'AccountName': 'إيرادات أخرى',
+            },
+            {
+              'Id': 'rev-profit',
+              'AccountCode': '4001',
+              'AccountName': 'أرباح الحوالات',
+            },
+          ],
+        },
+        {
+          'AccountCode': '1',
+          'AccountName': 'الأصول',
+          'IsParent': true,
+          'Children': [
+            {'Id': 'cash', 'AccountCode': '555', 'AccountName': 'صندوق'},
+          ],
+        },
+      ];
+      final party = pickRevenueProfitAccount(flattenAccounts(tree), tree: tree);
+      expect(party.id, 'rev-profit');
+      expect(party.code, '4001');
+      expect(party.name, 'أرباح الحوالات');
+    });
+
+    test('does not invent a default when the chart has no revenue branch', () {
+      final accounts = [
+        {'Id': 'c', 'AccountCode': '9830', 'AccountName': 'أحمد'},
+        {'Id': 'd', 'AccountCode': '555', 'AccountName': 'صندوق'},
+      ];
+      expect(pickRevenueProfitAccount(accounts, tree: accounts).isEmpty, true);
+    });
+
+    test('finds أرباح الحوالات in a flat chart when the tree is unavailable', () {
+      final accounts = [
+        {'Id': 'c', 'AccountCode': '9830', 'AccountName': 'أحمد'},
+        {'Id': 'p', 'AccountCode': '4001', 'AccountName': 'أرباح الحوالات'},
+      ];
+      final party = pickRevenueProfitAccount(accounts);
+      expect(party.code, '4001');
+      expect(party.name, 'أرباح الحوالات');
+    });
+  });
+
   group('unwrapEntity', () {
     test('unwraps Wakeed data wrapper around an account', () {
       final acc = unwrapEntity({
