@@ -925,7 +925,9 @@ class _ProfitTabState extends State<ProfitTab> {
           const Text('سند ربحي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(
-            'حساب الربح يُجلب من الصندوق أو الإيراد المعيَّن على بطاقة كل حساب في وكيد، وليس من صندوق عام.',
+            app.chartRevenueProfit.label.isNotEmpty
+                ? 'حساب الربح دائماً من فرع الإيرادات: ${app.chartRevenueProfit.label} — وليس للدائن.'
+                : 'يُجلب حساب الربح تلقائياً من فرع الإيرادات في دليل الحسابات (عمولة الحوالات)، وليس للدائن.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -1003,13 +1005,13 @@ class _ProfitTabState extends State<ProfitTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً، وحساب الربح من الصندوق المعيَّن على كل حساب.',
+              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً، وحساب الربح من فرع الإيرادات وليس للدائن.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
             const DefaultAccountsCard(
               title: 'حسابات افتراضية — سند ربحي فردي',
-              subtitle: 'يُعبَّأ المدين والدائن تلقائياً. حساب الربح من الصندوق/الإيراد المعيَّن على كل حساب.',
+              subtitle: 'يُعبَّأ المدين والدائن تلقائياً. حساب الربح من فرع الإيرادات (عمولة الحوالات)، وليس للدائن.',
             ),
             const SizedBox(height: 8),
             LayoutBuilder(
@@ -1299,7 +1301,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'صندوق الربح المعيَّن: $who',
+                'صندوق الربح: $who',
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: WakeedColors.accent),
               ),
             ),

@@ -740,8 +740,8 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
   return rows;
 }
 
-/// Posts the profit/كسر line to the profit box assigned on that voucher's
-/// credit (الدائن) account card in Wakeed. Each account can have its own box.
+/// Posts the profit/كسر line to the chart revenue account (عمولة الحوالات),
+/// never to الدائن. 422 is always the profit owner when it exists in the chart.
 List<JournalRow> applyProfitThirdParty(
   List<JournalRow> rows, {
   AccountThirdParty Function(String accountCode)? profitAccountOf,
@@ -758,16 +758,10 @@ List<JournalRow> applyProfitThirdParty(
       if (credit == null && row.credit.isNotEmpty) credit = row;
       if (debit == null && row.debit.isNotEmpty) debit = row;
     }
-    AccountThirdParty tp = const AccountThirdParty();
-    if (credit != null) {
-      final found = profitAccountOf?.call(credit.account) ?? const AccountThirdParty();
-      if (!found.isEmpty &&
-          !found.matchesAccountCode(credit.account) &&
-          !found.matchesAccountCode(debit?.account ?? '')) {
-        tp = found;
-      }
+    var tp = profitAccount;
+    if (tp.isEmpty && credit != null) {
+      tp = profitAccountOf?.call(credit.account) ?? const AccountThirdParty();
     }
-    if (tp.isEmpty) tp = profitAccount;
     if (tp.matchesAccountCode(credit?.account ?? '') || tp.matchesAccountCode(debit?.account ?? '')) {
       tp = const AccountThirdParty();
     }

@@ -311,6 +311,31 @@ void main() {
       expect(party.name, 'أرباح الحوالات');
     });
 
+    test('prefers عمولة الحوالات when both commission and profit revenue leaves exist', () {
+      final tree = [
+        {
+          'AccountCode': '4',
+          'AccountName': 'الإيرادات',
+          'IsParent': true,
+          'Children': [
+            {
+              'Id': 'rev-profit',
+              'AccountCode': '4001',
+              'AccountName': 'أرباح الحوالات',
+            },
+            {
+              'Id': 'rev-422',
+              'AccountCode': '422',
+              'AccountName': 'عمولة الحوالات',
+            },
+          ],
+        },
+      ];
+      final party = pickRevenueProfitAccount(flattenAccounts(tree), tree: tree);
+      expect(party.code, '422');
+      expect(party.name, 'عمولة الحوالات');
+    });
+
     test('does not invent a default when the chart has no revenue branch', () {
       final accounts = [
         {'Id': 'c', 'AccountCode': '9830', 'AccountName': 'أحمد'},

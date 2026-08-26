@@ -475,7 +475,8 @@ bool isRevenueClassified(dynamic acc) => isRevenueName(accountClassBlob(acc));
 
 int revenueProfitScore(dynamic acc) {
   final n = accountNameOf(acc);
-  if (RegExp(r'أرباح\s*الحوالات|ارباح\s*الحوالات').hasMatch(n)) return 100;
+  if (RegExp(r'عمولة\s*الحوالات|عمولة\s*الحوالة').hasMatch(n)) return 100;
+  if (RegExp(r'أرباح\s*الحوالات|ارباح\s*الحوالات').hasMatch(n)) return 95;
   if (RegExp(r'(ربح|أرباح|ارباح).*(حوال)|حوال.*(ربح|أرباح|ارباح)').hasMatch(n)) return 80;
   if (n.contains('عمولة')) return 55;
   if (RegExp(r'أرباح|ارباح').hasMatch(n)) return 40;

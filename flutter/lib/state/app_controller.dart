@@ -851,41 +851,9 @@ class AppController extends ChangeNotifier {
   }
 
   AccountThirdParty profitAccountFor(String code) {
-    final acc = _accountByCode(normalizeAccountKey(code));
-    var party = pickAssignedProfitAccount(acc);
-    if (party.isEmpty) return const AccountThirdParty();
-    if (acc != null && party.matchesAccount(acc)) return const AccountThirdParty();
-    if (party.code.isNotEmpty && party.name.isNotEmpty) {
-      if (party.id.isEmpty) {
-        final a = _accountByCode(party.code);
-        if (a != null) {
-          return AccountThirdParty(
-            id: pickId(a),
-            code: pickAccountCode(a),
-            name: accountNameOf(a),
-          );
-        }
-      }
-      return party;
-    }
-    if (party.id.isNotEmpty) {
-      for (final a in accounts) {
-        if (pickId(a) == party.id) {
-          return AccountThirdParty(id: party.id, code: pickAccountCode(a), name: accountNameOf(a));
-        }
-      }
-    }
-    if (party.code.isNotEmpty) {
-      final a = _accountByCode(party.code);
-      if (a != null) {
-        return AccountThirdParty(
-          id: pickId(a).isNotEmpty ? pickId(a) : party.id,
-          code: pickAccountCode(a),
-          name: accountNameOf(a),
-        );
-      }
-    }
-    return party;
+    final tp = chartRevenueProfit;
+    if (tp.isEmpty || tp.matchesAccountCode(code)) return const AccountThirdParty();
+    return tp;
   }
 
   String thirdPartyLabelFor(String code) {
@@ -899,11 +867,9 @@ class AppController extends ChangeNotifier {
   }
 
   String profitBeneficiaryLabel({String credit = '', String debit = ''}) {
-    final party = profitAccountFor(credit);
-    if (party.isEmpty || party.matchesAccountCode(credit) || party.matchesAccountCode(debit)) {
-      return '';
-    }
-    return party.label;
+    final tp = chartRevenueProfit;
+    if (tp.isEmpty || tp.matchesAccountCode(credit) || tp.matchesAccountCode(debit)) return '';
+    return tp.label;
   }
 
   Future<dynamic> hydrateAccount(String code, {bool force = false}) async {
@@ -1791,7 +1757,7 @@ class AppController extends ChangeNotifier {
   List<JournalRow> profitRows() {
     return applyProfitThirdParty(
       buildProfitJournalRows(currentProfitPaste()),
-      profitAccountOf: profitAccountFor,
+      profitAccount: chartRevenueProfit,
     );
   }
 
@@ -2601,7 +2567,7 @@ class AppController extends ChangeNotifier {
         await hydrateProfitAccounts(workingRows.map((r) => r.account));
         workingRows = applyProfitThirdParty(
           buildProfitJournalRows(currentProfitPaste()),
-          profitAccountOf: profitAccountFor,
+          profitAccount: chartRevenueProfit,
         );
         final missing = workingRows
             .map((r) => normalizeAccountKey(r.account))
@@ -2719,15 +2685,9 @@ class AppController extends ChangeNotifier {
   String profitBoxLabelForRow(List<JournalRow> rows, JournalRow line) {
     if (!line.balancing) return '';
     if (line.thirdPartyName.isNotEmpty) return line.thirdPartyName;
-    JournalRow? credit;
-    JournalRow? debit;
-    for (final row in rows) {
-      if (line.groupKey.isNotEmpty && row.groupKey != line.groupKey) continue;
-      if (row.balancing) continue;
-      if (credit == null && row.credit.isNotEmpty) credit = row;
-      if (debit == null && row.debit.isNotEmpty) debit = row;
-    }
-    return profitBeneficiaryLabel(credit: credit?.account ?? '', debit: debit?.account ?? '');
+    final tp = chartRevenueProfit;
+    if (tp.isEmpty) return '';
+    return tp.label;
   }
 
   String profitPartyLabel(ProfitPasteRow row) {
@@ -2831,7 +2791,7 @@ class AppController extends ChangeNotifier {
     final paste = [for (final group in pending) _profitPasteFromGroup(group)];
     final rebuilt = applyProfitThirdParty(
       buildProfitJournalRows(paste),
-      profitAccountOf: profitAccountFor,
+      profitAccount: chartRevenueProfit,
     );
     var resolved = Map<String, dynamic>.from(prepared.resolved);
     final missing = rebuilt
