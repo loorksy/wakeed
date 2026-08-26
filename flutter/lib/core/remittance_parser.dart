@@ -740,8 +740,8 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
   return rows;
 }
 
-/// Posts the profit/كسر line to the chart revenue account (عمولة الحوالات),
-/// never to الدائن. 422 is always the profit owner when it exists in the chart.
+/// Posts the profit/كسر line to the selected third-party account
+/// (default 422 عمولة الحوالات from settings), never to الدائن.
 List<JournalRow> applyProfitThirdParty(
   List<JournalRow> rows, {
   AccountThirdParty Function(String accountCode)? profitAccountOf,

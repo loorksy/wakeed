@@ -95,10 +95,10 @@ class HomeScreen extends StatelessWidget {
       body: index == 5
           ? const LedgerTab()
           : ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 20),
               children: [
                 const SettingsCard(),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 if (index == 0) const BatchTab(),
                 if (index == 1) const EachTab(),
                 if (index == 2) const ManualTab(),
@@ -178,12 +178,13 @@ class _BatchTabState extends State<BatchTab> {
     if (app.notesBatch.isEmpty && notes.text.isNotEmpty) notes.clear();
     final rows = app.currentRows('batch');
     return AppCard(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(child: Text('سند جماعي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
+              const Expanded(child: Text('جماعي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
               TextButton(
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: sheetTemplate));
@@ -195,19 +196,12 @@ class _BatchTabState extends State<BatchTab> {
               ),
             ],
           ),
-          const DebitAccountField(),
-          const Text('البيان'),
-          const SizedBox(height: 4),
           TextField(
             controller: notes,
-            decoration: const InputDecoration(hintText: 'ملاحظة السند'),
+            decoration: const InputDecoration(hintText: 'البيان'),
             onChanged: app.setNotesBatch,
           ),
-          const SizedBox(height: 4),
-          Text(app.notesPreviewText('batch'), style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
-          const Text('البيانات'),
-          const SizedBox(height: 4),
           TextField(
             controller: data,
             minLines: 6,
@@ -316,12 +310,13 @@ class _EachTabState extends State<EachTab> {
       }
     }
     return AppCard(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(child: Text('سند لكل عميل', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
+              const Expanded(child: Text('لكل عميل', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
               TextButton(
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: sheetTemplate));
@@ -333,19 +328,12 @@ class _EachTabState extends State<EachTab> {
               ),
             ],
           ),
-          const DebitAccountField(),
-          const Text('البيان'),
-          const SizedBox(height: 4),
           TextField(
             controller: notes,
-            decoration: const InputDecoration(hintText: 'ملاحظة السند'),
+            decoration: const InputDecoration(hintText: 'البيان'),
             onChanged: app.setNotesEach,
           ),
-          const SizedBox(height: 4),
-          Text(app.notesPreviewText('each'), style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
-          const Text('البيانات'),
-          const SizedBox(height: 4),
           TextField(
             controller: data,
             minLines: 6,
@@ -419,19 +407,17 @@ class ManualTab extends StatelessWidget {
       }
     }
     return AppCard(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
-                child: Text('فردي — سند لكل عميل', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-              ),
+              const Expanded(child: Text('فردي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
               Text('${app.manualEntries.length}', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
-          const DefaultAccountsCard(),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           for (var i = 0; i < app.manualEntries.length; i++)
             _ManualEntryCard(key: ValueKey(app.manualEntries[i].id), index: i, entry: app.manualEntries[i]),
           OutlinedButton(onPressed: app.addManualEntry, child: const Text('+ سند')),
@@ -535,8 +521,8 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
     final debitBase = amountToBaseFromQuote(amountFromBase(creditBase, debitQ.isBase ? 1 : debitQ.hawalaRate), debitQ);
     final mixed = !creditQ.isBase || !debitQ.isBase;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
@@ -546,17 +532,20 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
         children: [
           Row(
             children: [
-              Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              TextButton(
+              Expanded(child: Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700))),
+              IconButton(
+                tooltip: 'حذف',
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
                 onPressed: app.manualEntries.length > 1 ? () => app.removeManualEntry(widget.entry.id) : null,
-                child: const Text('حذف'),
+                icon: const Icon(Icons.close, size: 18),
               ),
             ],
           ),
           TextField(
             controller: nameCtrl,
-            decoration: const InputDecoration(labelText: 'الاسم', hintText: 'اسم العميل'),
+            decoration: const InputDecoration(hintText: 'الاسم'),
             onChanged: (_) => _sync(),
           ),
           const SizedBox(height: 6),
@@ -581,12 +570,12 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
               ),
               IconButton(
                 tooltip: 'اختر',
+                visualDensity: VisualDensity.compact,
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.credit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, color: WakeedColors.green),
               ),
             ],
           ),
-          ThirdPartyCaption(accountCode: creditCtrl.text),
           if (mixed && amt > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(
@@ -600,7 +589,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
           const SizedBox(height: 6),
           TextField(
             controller: noteCtrl,
-            decoration: const InputDecoration(labelText: 'البيان', hintText: 'ملاحظة هذا العميل'),
+            decoration: const InputDecoration(hintText: 'البيان'),
             onChanged: (_) => _sync(),
           ),
         ],
@@ -636,25 +625,17 @@ class ChargeTab extends StatelessWidget {
       }
     }
     return AppCard(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
-                child: Text('شحن — سند لكل عملية', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-              ),
+              const Expanded(child: Text('شحن', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
               Text('${app.chargeEntries.length}', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
-          const SizedBox(height: 4),
-          const DefaultAccountsCard(title: 'حسابات افتراضية — شحن'),
-          const SizedBox(height: 4),
-          Text(
-            'يُعبَّأ المدين والدائن من الافتراضي. يمكن تغييرهما لكل سند. الطرف الثالث دائماً حساب الإيرادات، وليس الدائن.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           for (var i = 0; i < app.chargeEntries.length; i++)
             _ChargeEntryCard(key: ValueKey(app.chargeEntries[i].id), index: i, entry: app.chargeEntries[i]),
           OutlinedButton(onPressed: app.addChargeEntry, child: const Text('+ سند')),
@@ -764,8 +745,8 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
     final debitBase = amountToBaseFromQuote(amountFromBase(creditBase, debitQ.isBase ? 1 : debitQ.hawalaRate), debitQ);
     final mixed = !creditQ.isBase || !debitQ.isBase;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
@@ -775,17 +756,20 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
         children: [
           Row(
             children: [
-              Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              TextButton(
+              Expanded(child: Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700))),
+              IconButton(
+                tooltip: 'حذف',
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
                 onPressed: app.chargeEntries.length > 1 ? () => app.removeChargeEntry(widget.entry.id) : null,
-                child: const Text('حذف'),
+                icon: const Icon(Icons.close, size: 18),
               ),
             ],
           ),
           TextField(
             controller: nameCtrl,
-            decoration: const InputDecoration(labelText: 'الاسم', hintText: 'اسم العميل'),
+            decoration: const InputDecoration(hintText: 'الاسم'),
             onChanged: (_) => _sync(),
           ),
           const SizedBox(height: 6),
@@ -809,12 +793,12 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
               IconButton(
                 tooltip: 'اختر المدين',
+                visualDensity: VisualDensity.compact,
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.chargeDebit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, color: WakeedColors.err),
               ),
             ],
           ),
-          ThirdPartyCaption(accountCode: debitCtrl.text),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -827,12 +811,12 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
               IconButton(
                 tooltip: 'اختر الدائن',
+                visualDensity: VisualDensity.compact,
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.chargeCredit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, color: WakeedColors.green),
               ),
             ],
           ),
-          ThirdPartyCaption(accountCode: creditCtrl.text),
           if (mixed && amt > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(
@@ -846,7 +830,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
           const SizedBox(height: 6),
           TextField(
             controller: noteCtrl,
-            decoration: const InputDecoration(labelText: 'البيان', hintText: 'ملاحظة هذا السند'),
+            decoration: const InputDecoration(hintText: 'البيان'),
             onChanged: (_) => _sync(),
           ),
         ],
@@ -888,7 +872,6 @@ class _ProfitTabState extends State<ProfitTab> {
     if (app.notesProfit.isEmpty && notes.text.isNotEmpty) notes.clear();
     app.ensureProfitEntries();
     final rows = app.profitRows();
-    final groups = profitLedgerGroups(rows);
     final paste = app.currentProfitPaste();
     final pt = profitPasteTotals(paste);
     final profit = pt['diff'] ?? 0;
@@ -923,16 +906,24 @@ class _ProfitTabState extends State<ProfitTab> {
         ],
     ];
     return AppCard(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('سند ربحي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text(
-            app.chartRevenueProfit.label.isNotEmpty
-                ? 'حساب الربح دائماً من فرع الإيرادات: ${app.chartRevenueProfit.label} — وليس للدائن.'
-                : 'يُجلب حساب الربح تلقائياً من فرع الإيرادات في دليل الحسابات (عمولة الحوالات)، وليس للدائن.',
-            style: Theme.of(context).textTheme.bodySmall,
+          Row(
+            children: [
+              const Expanded(child: Text('ربحي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
+              if (app.profitMode != 'each')
+                TextButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: profitSheetTemplate));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ القالب')));
+                    }
+                  },
+                  child: const Text('قالب'),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           SegmentedButton<String>(
@@ -950,47 +941,14 @@ class _ProfitTabState extends State<ProfitTab> {
               textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           if (app.profitMode != 'each') ...[
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    app.profitMode == 'split' ? 'لصق جماعي — سند منفصل لكل سطر' : 'لصق الدائن والمدين',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: profitSheetTemplate));
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ القالب')));
-                    }
-                  },
-                  child: const Text('قالب'),
-                ),
-              ],
-            ),
-            if (app.profitMode == 'split') ...[
-              const SizedBox(height: 4),
-              Text(
-                'الصق كل السندات دفعة واحدة. عند الإنشاء يُسجَّل كل سطر سنداً منفصلاً في وكيد.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-            const SizedBox(height: 8),
-            const Text('البيان'),
-            const SizedBox(height: 4),
             TextField(
               controller: notes,
-              decoration: InputDecoration(
-                hintText: app.profitMode == 'split' ? 'ملاحظة تُضاف لكل سند' : 'ملاحظة السند',
-              ),
+              decoration: const InputDecoration(hintText: 'البيان'),
               onChanged: app.setNotesProfit,
             ),
             const SizedBox(height: 8),
-            const Text('البيانات'),
-            const SizedBox(height: 4),
             TextField(
               controller: data,
               minLines: 5,
@@ -999,25 +957,6 @@ class _ProfitTabState extends State<ProfitTab> {
               onChanged: app.setTableProfit,
             ),
           ] else ...[
-            Row(
-              children: [
-                const Expanded(
-                  child: Text('فردي — سند لكل بطاقة', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-                Text('${app.profitEntries.length}', style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً، وحساب الربح من فرع الإيرادات وليس للدائن.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            const DefaultAccountsCard(
-              title: 'حسابات افتراضية — سند ربحي فردي',
-              subtitle: 'يُعبَّأ المدين والدائن تلقائياً. حساب الربح من فرع الإيرادات (عمولة الحوالات)، وليس للدائن.',
-            ),
-            const SizedBox(height: 8),
             LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 640;
@@ -1061,24 +1000,12 @@ class _ProfitTabState extends State<ProfitTab> {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            'سندات ${groups.length}',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
           ProfitFxBar(
             diff: profit,
             creditBase: pt['creditBase'] ?? pt['credit'] ?? 0,
             debitBase: pt['debitBase'] ?? pt['debit'] ?? 0,
             symbol: app.baseCurrencyQuote().symbol,
           ),
-          if ((pt['fx'] ?? 0) > 0) ...[
-            const SizedBox(height: 4),
-            Text(
-              'الفرق بالدولار حسب أسعار صرف الحوالات',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
           const SizedBox(height: 8),
           PreviewTable(
             columns: const ['سند', '#', 'البيان', 'حساب', 'طرف ثالث', 'مدين', 'دائن', 'محلول'],
@@ -1214,9 +1141,11 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final debitBase = amountToBaseFromQuote(d, debitQ);
     final profit = roundMoney(debitBase - creditBase);
     final baseSymbol = app.baseCurrencyQuote().symbol;
-    final who = app.profitBeneficiaryLabel(credit: creditCtrl.text, debit: debitCtrl.text);
+    final title = (c > 0 || d > 0)
+        ? 'سند ${widget.index + 1} · ${profitKindLabel(profit)} ${formatProfitSigned(profit)} $baseSymbol'
+        : 'سند ${widget.index + 1}';
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
@@ -1226,41 +1155,25 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
         children: [
           Row(
             children: [
-              Text('سند ${widget.index + 1}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-              const SizedBox(width: 8),
-              if (c > 0 || d > 0)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${profitKindLabel(profit)} ${formatProfitSigned(profit)} $baseSymbol',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: profit > 0.001
-                            ? WakeedColors.green
-                            : profit < -0.001
-                                ? WakeedColors.err
-                                : WakeedColors.accent,
-                      ),
-                    ),
-                    if (who.isNotEmpty)
-                      Text(
-                        profitForLabel(profit, who),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: profit > 0.001
-                              ? WakeedColors.green
-                              : profit < -0.001
-                                  ? WakeedColors.err
-                                  : WakeedColors.accent,
-                        ),
-                      ),
-                  ],
+              Expanded(
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: profit > 0.001
+                        ? WakeedColors.green
+                        : profit < -0.001
+                            ? WakeedColors.err
+                            : null,
+                  ),
                 ),
-              const Spacer(),
+              ),
               IconButton(
                 visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                padding: EdgeInsets.zero,
                 tooltip: 'حذف',
                 onPressed: app.profitEntries.length > 1 ? () => app.removeProfitEntry(widget.entry.id) : null,
                 icon: const Icon(Icons.close, size: 18),
@@ -1280,6 +1193,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
                 tooltip: 'اختر الحساب',
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.profitCredit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.green),
@@ -1301,14 +1216,6 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 ),
               ),
             ),
-          if (who.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'صندوق الربح: $who',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: WakeedColors.accent),
-              ),
-            ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1324,6 +1231,8 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
                 tooltip: 'اختر الحساب',
                 onPressed: () => showAccountPicker(context, target: AccountPickTarget.profitDebit(widget.entry.id)),
                 icon: const Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.err),

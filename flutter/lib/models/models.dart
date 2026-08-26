@@ -215,6 +215,7 @@ class SubmitJob {
 class AccountPickTarget {
   AccountPickTarget.debit() : type = 'debit', entryId = null;
   AccountPickTarget.defaultCredit() : type = 'defaultCredit', entryId = null;
+  AccountPickTarget.thirdParty() : type = 'thirdParty', entryId = null;
   AccountPickTarget.credit(this.entryId) : type = 'credit';
   AccountPickTarget.chargeDebit(this.entryId) : type = 'chargeDebit';
   AccountPickTarget.chargeCredit(this.entryId) : type = 'chargeCredit';

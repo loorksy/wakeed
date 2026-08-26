@@ -30,17 +30,19 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
-    final isDebit = switch (app.accountPickTarget.type) {
-      'debit' || 'chargeDebit' || 'profitDebit' => true,
-      _ => false,
-    };
-    final title = switch (app.accountPickTarget.type) {
-      'debit' => 'دليل الحسابات — المدين الافتراضي',
-      'defaultCredit' => 'دليل الحسابات — الدائن الافتراضي',
+    final type = app.accountPickTarget.type;
+    final title = switch (type) {
+      'debit' => 'دليل الحسابات — المدين',
+      'defaultCredit' => 'دليل الحسابات — الدائن',
+      'thirdParty' => 'دليل الحسابات — الطرف الثالث',
       'chargeDebit' || 'profitDebit' => 'دليل الحسابات — المدين',
       _ => 'دليل الحسابات — الدائن',
     };
-    final tone = isDebit ? WakeedColors.err : WakeedColors.green;
+    final tone = switch (type) {
+      'debit' || 'chargeDebit' || 'profitDebit' => WakeedColors.err,
+      'thirdParty' => WakeedColors.accent,
+      _ => WakeedColors.green,
+    };
     final list = app.filteredAccounts(query);
     final shown = list.take(120).toList();
     return SafeArea(
@@ -90,18 +92,23 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                           final acc = shown[i];
                           final code = pickAccountCode(acc);
                           final name = accountNameOf(acc);
-                          final active = (code == app.debitAccount && app.accountPickTarget.type == 'debit') ||
-                              (code == app.creditAccount && app.accountPickTarget.type == 'defaultCredit');
+                          final active = switch (app.accountPickTarget.type) {
+                            'debit' => code == app.debitAccount,
+                            'defaultCredit' => code == app.creditAccount,
+                            'thirdParty' => code == app.preferredThirdPartyCode(),
+                            _ => false,
+                          };
                           return ListTile(
                             selected: active,
-                            title: Text(code, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            title: Text(
+                              code,
+                              style: TextStyle(fontWeight: active ? FontWeight.w800 : FontWeight.w700),
+                            ),
                             subtitle: Text(
                               [
                                 name,
                                 if (app.currencyQuoteForAccount(code).badge.isNotEmpty)
                                   app.currencyQuoteForAccount(code).badge,
-                                if (app.thirdPartyLabelFor(code).isNotEmpty)
-                                  'طرف ثالث: ${app.thirdPartyLabelFor(code)}',
                               ].where((s) => s.toString().trim().isNotEmpty).join(' · '),
                             ),
                             onTap: () => _pick(app, code),
@@ -136,6 +143,8 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
       }
     } else if (target.type == 'defaultCredit') {
       app.selectCreditAccount(code);
+    } else if (target.type == 'thirdParty') {
+      app.selectThirdPartyAccount(code);
     } else {
       app.selectDebitAccount(code);
     }

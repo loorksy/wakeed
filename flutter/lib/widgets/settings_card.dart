@@ -20,7 +20,7 @@ class SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       child: Column(
         children: [
           Row(
@@ -110,6 +110,37 @@ class SettingsCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _AccountPick(
+                  label: 'مدين',
+                  value: app.debitAccountLabel(),
+                  color: WakeedColors.err,
+                  onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _AccountPick(
+                  label: 'دائن',
+                  value: app.creditAccountLabel(),
+                  color: WakeedColors.green,
+                  onTap: () => showAccountPicker(context, target: AccountPickTarget.defaultCredit()),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _AccountPick(
+                  label: 'طرف ثالث',
+                  value: app.thirdPartyAccountLabel(),
+                  color: WakeedColors.accent,
+                  onTap: () => showAccountPicker(context, target: AccountPickTarget.thirdParty()),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 2),
           Row(
             children: [
@@ -127,187 +158,58 @@ class SettingsCard extends StatelessWidget {
               ),
             ],
           ),
-          if (app.chartRevenueProfit.label.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'صندوق الربح / الطرف الثالث في كل التبويبات: ${app.chartRevenueProfit.label} — وليس الدائن.',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: WakeedColors.accent),
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 }
 
-class DebitAccountField extends StatelessWidget {
-  const DebitAccountField({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppController>();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      [
-                        'حساب المدين',
-                        if (app.currencyQuoteForAccount(app.debitAccount).badge.isNotEmpty)
-                          app.currencyQuoteForAccount(app.debitAccount).badge,
-                      ].join(' '),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WakeedColors.err),
-                    ),
-                    const SizedBox(height: 4),
-                    InkWell(
-                      onTap: () => showAccountPicker(context, target: AccountPickTarget.debit()),
-                      child: InputDecorator(
-                        decoration: partyFieldDecoration(
-                          debit: true,
-                          base: SettingsCard.dense,
-                          suffixIcon: Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.err),
-                          suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        ),
-                        child: Text(
-                          app.debitAccountLabel(),
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: WakeedColors.err, fontSize: 12),
-                        ),
-                      ),
-                    ),
-                    ThirdPartyCaption(accountCode: app.debitAccount),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: app.saveDebitDefault,
-                child: const Text('حفظ افتراضي'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class CreditAccountField extends StatelessWidget {
-  const CreditAccountField({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppController>();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            [
-              'حساب الدائن',
-              if (app.currencyQuoteForAccount(app.creditAccount).badge.isNotEmpty)
-                app.currencyQuoteForAccount(app.creditAccount).badge,
-            ].join(' '),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WakeedColors.green),
-          ),
-          const SizedBox(height: 4),
-          InkWell(
-            onTap: () => showAccountPicker(context, target: AccountPickTarget.defaultCredit()),
-            child: InputDecorator(
-              decoration: partyFieldDecoration(
-                debit: false,
-                base: SettingsCard.dense,
-                suffixIcon: Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.green),
-                suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-              child: Text(
-                app.creditAccountLabel(),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: WakeedColors.green, fontSize: 12),
-              ),
-            ),
-          ),
-          ThirdPartyCaption(accountCode: app.creditAccount),
-        ],
-      ),
-    );
-  }
-}
-
-class DefaultAccountsCard extends StatelessWidget {
-  const DefaultAccountsCard({
-    super.key,
-    this.title = 'حسابات افتراضية — سند فردي',
-    this.subtitle = 'يُعبَّأ المدين والدائن تلقائياً. الطرف الثالث دائماً حساب الإيرادات (عمولة الحوالات)، وليس الدائن.',
+class _AccountPick extends StatelessWidget {
+  const _AccountPick({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.onTap,
   });
 
-  final String title;
-  final String subtitle;
+  final String label;
+  final String value;
+  final Color color;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppController>();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            const DebitAccountField(),
-            const CreditAccountField(),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.tonal(
-                onPressed: app.savePartyDefaults,
-                child: const Text('حفظ المدين والدائن كافتراضي'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+        const SizedBox(height: 2),
+        InkWell(
+          onTap: onTap,
+          child: InputDecorator(
+            decoration: SettingsCard.dense.copyWith(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: color.withValues(alpha: 0.55)),
               ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: color),
+              ),
+              suffixIcon: Icon(Icons.account_tree_outlined, size: 16, color: color),
+              suffixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
-          ],
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class ThirdPartyCaption extends StatelessWidget {
-  const ThirdPartyCaption({super.key, required this.accountCode});
-
-  final String accountCode;
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppController>();
-    final label = app.thirdPartyLabelFor(accountCode);
-    if (label.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Text(
-        'طرف ثالث: $label',
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: WakeedColors.accent),
-      ),
+      ],
     );
   }
 }

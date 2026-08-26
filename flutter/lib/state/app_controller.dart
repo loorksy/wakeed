@@ -37,6 +37,8 @@ class AppController extends ChangeNotifier {
   String creditAccount = '';
   String pendingDebitCode = '';
   String pendingCreditCode = '';
+  String pendingThirdPartyCode = '';
+  String thirdPartyAccount = '';
   String debitHawalaRate = '';
   String entryDate = todayInputValue();
   String journalTypeId = '';
@@ -75,6 +77,7 @@ class AppController extends ChangeNotifier {
   AccountThirdParty chartRevenueProfit = const AccountThirdParty();
   Map<String, String> debitDefaults = {};
   Map<String, String> creditDefaults = {};
+  Map<String, String> thirdPartyDefaults = {};
   final Set<String> _hydratedAccountCodes = {};
   String journalPostPath = '';
   final Map<String, dynamic> accountCache = {};
@@ -455,6 +458,8 @@ class AppController extends ChangeNotifier {
       'debitHawalaRate': '',
       'debitDefaults': debitDefaults,
       'creditDefaults': creditDefaults,
+      'thirdPartyDefaults': thirdPartyDefaults,
+      'thirdPartyAccount': thirdPartyAccount,
       'notes': notesBatch,
       'notesEach': notesEach,
       'table': tableBatch,
@@ -501,8 +506,15 @@ class AppController extends ChangeNotifier {
       if (settings['creditDefaults'] is Map) {
         creditDefaults = (settings['creditDefaults'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
       }
+      if (settings['thirdPartyDefaults'] is Map) {
+        thirdPartyDefaults = (settings['thirdPartyDefaults'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
+      }
       if (settings['debitAccount'] != null) pendingDebitCode = settings['debitAccount'].toString();
       if (settings['creditAccount'] != null) pendingCreditCode = settings['creditAccount'].toString();
+      if (settings['thirdPartyAccount'] != null) {
+        pendingThirdPartyCode = settings['thirdPartyAccount'].toString();
+        thirdPartyAccount = pendingThirdPartyCode;
+      }
       debitHawalaRate = '';
       if (settings['notes'] != null) notesBatch = settings['notes'].toString();
       if (settings['notesEach'] != null) notesEach = settings['notesEach'].toString();
@@ -771,6 +783,7 @@ class AppController extends ChangeNotifier {
           }
           fillDebitAccounts();
           fillCreditAccounts();
+          fillThirdPartyAccount();
         }
         _refreshChartRevenueProfit();
         if (hasChildren || !chartRevenueProfit.isEmpty) return;
@@ -781,6 +794,7 @@ class AppController extends ChangeNotifier {
 
   void _refreshChartRevenueProfit() {
     chartRevenueProfit = pickRevenueProfitAccount(accounts, tree: accountTree);
+    fillThirdPartyAccount();
     _emit();
   }
 
@@ -800,6 +814,50 @@ class AppController extends ChangeNotifier {
     if (pendingCreditCode.isNotEmpty) return pendingCreditCode;
     if (creditAccount.isNotEmpty) return creditAccount;
     return defaultCreditAccount;
+  }
+
+  String preferredThirdPartyCode() {
+    final owner = currentOwnerKey();
+    if (owner.isNotEmpty && thirdPartyDefaults[owner] != null && thirdPartyDefaults[owner]!.isNotEmpty) {
+      return thirdPartyDefaults[owner]!;
+    }
+    if (pendingThirdPartyCode.isNotEmpty) return pendingThirdPartyCode;
+    if (thirdPartyAccount.isNotEmpty) return thirdPartyAccount;
+    if (chartRevenueProfit.code.isNotEmpty) return chartRevenueProfit.code;
+    return defaultThirdPartyAccount;
+  }
+
+  AccountThirdParty get selectedProfitParty {
+    final code = preferredThirdPartyCode();
+    if (code.isEmpty) return chartRevenueProfit;
+    final acc = _accountByCode(normalizeAccountKey(code));
+    if (acc != null) {
+      return AccountThirdParty(
+        id: pickId(acc),
+        code: pickAccountCode(acc),
+        name: accountNameOf(acc),
+      );
+    }
+    if (chartRevenueProfit.matchesAccountCode(code)) return chartRevenueProfit;
+    return AccountThirdParty(code: code);
+  }
+
+  void fillThirdPartyAccount() {
+    final preferred = preferredThirdPartyCode();
+    if (preferred.isNotEmpty && accounts.any((a) => pickAccountCode(a) == preferred)) {
+      thirdPartyAccount = preferred;
+    } else if (chartRevenueProfit.code.isNotEmpty) {
+      thirdPartyAccount = chartRevenueProfit.code;
+    } else {
+      thirdPartyAccount = defaultThirdPartyAccount;
+    }
+    final owner = currentOwnerKey();
+    if (owner.isNotEmpty &&
+        (thirdPartyDefaults[owner] == null || thirdPartyDefaults[owner]!.isEmpty) &&
+        thirdPartyAccount.isNotEmpty) {
+      thirdPartyDefaults[owner] = thirdPartyAccount;
+      scheduleSaveLocal();
+    }
   }
 
   void fillDebitAccounts() {
@@ -831,11 +889,14 @@ class AppController extends ChangeNotifier {
   }
 
   String debitAccountLabel() {
-    return _accountCodeLabel(debitAccount);
+    return _accountCodeLabel(preferredDebitCode().isNotEmpty ? preferredDebitCode() : debitAccount);
   }
 
   String creditAccountLabel() {
-    return _accountCodeLabel(creditAccount, emptyHint: 'اختر حساب الدائن');
+    return _accountCodeLabel(
+      preferredCreditCode().isNotEmpty ? preferredCreditCode() : creditAccount,
+      emptyHint: 'اختر حساب الدائن',
+    );
   }
 
   String _accountCodeLabel(String code, {String emptyHint = 'اختر من دليل الحسابات'}) {
@@ -847,7 +908,7 @@ class AppController extends ChangeNotifier {
   }
 
   AccountThirdParty postingThirdPartyFor(String accountCode) {
-    final tp = chartRevenueProfit;
+    final tp = selectedProfitParty;
     if (tp.isEmpty || tp.matchesAccountCode(accountCode)) return const AccountThirdParty();
     return tp;
   }
@@ -866,7 +927,7 @@ class AppController extends ChangeNotifier {
   }
 
   String profitBeneficiaryLabel({String credit = '', String debit = ''}) {
-    final tp = chartRevenueProfit;
+    final tp = selectedProfitParty;
     if (tp.isEmpty || tp.matchesAccountCode(credit) || tp.matchesAccountCode(debit)) return '';
     return tp.label;
   }
@@ -1266,6 +1327,8 @@ class AppController extends ChangeNotifier {
     debitAccount = value;
     pendingDebitCode = value;
     debitHawalaRate = '';
+    final owner = currentOwnerKey();
+    if (owner.isNotEmpty) debitDefaults[owner] = value;
     saveLocal();
     _emit();
     unawaited(hydrateAccount(value).then((_) => _emit()));
@@ -1276,9 +1339,27 @@ class AppController extends ChangeNotifier {
     if (value.isEmpty) return;
     creditAccount = value;
     pendingCreditCode = value;
+    final owner = currentOwnerKey();
+    if (owner.isNotEmpty) creditDefaults[owner] = value;
     saveLocal();
     _emit();
     unawaited(hydrateAccount(value).then((_) => _emit()));
+  }
+
+  void selectThirdPartyAccount(String code) {
+    final value = code.trim();
+    if (value.isEmpty) return;
+    thirdPartyAccount = value;
+    pendingThirdPartyCode = value;
+    final owner = currentOwnerKey();
+    if (owner.isNotEmpty) thirdPartyDefaults[owner] = value;
+    saveLocal();
+    _emit();
+    unawaited(hydrateAccount(value).then((_) => _emit()));
+  }
+
+  String thirdPartyAccountLabel() {
+    return _accountCodeLabel(preferredThirdPartyCode(), emptyHint: 'اختر الطرف الثالث');
   }
 
   List<JournalRow> withAccountFx(List<JournalRow> rows) {
@@ -1317,6 +1398,8 @@ class AppController extends ChangeNotifier {
     }
     if (debit.isNotEmpty) debitDefaults[owner] = debit;
     if (credit.isNotEmpty) creditDefaults[owner] = credit;
+    final third = preferredThirdPartyCode();
+    if (third.isNotEmpty) thirdPartyDefaults[owner] = third;
     pendingDebitCode = debit.isNotEmpty ? debit : pendingDebitCode;
     pendingCreditCode = credit.isNotEmpty ? credit : pendingCreditCode;
     _fillEmptyEntryAccounts();
@@ -1346,6 +1429,7 @@ class AppController extends ChangeNotifier {
     into[owner] = code;
     if (into == debitDefaults) pendingDebitCode = code;
     if (into == creditDefaults) pendingCreditCode = code;
+    if (into == thirdPartyDefaults) pendingThirdPartyCode = code;
     _fillEmptyEntryAccounts();
     saveLocal();
     showSubmitSuccess('تم الحفظ', 'تم حفظ الحساب الافتراضي.', successDetail);
@@ -1552,13 +1636,6 @@ class AppController extends ChangeNotifier {
     return composeNote(group.name, extra);
   }
 
-  String notesPreviewText(String section) {
-    final extra = sectionNote(section);
-    return extra.isNotEmpty
-        ? 'ستظهر في البيان: اسم العميل — $extra'
-        : 'بدون ملاحظة إضافية — سيظهر اسم العميل كبيان.';
-  }
-
   void ensureChargeEntries() {
     if (chargeEntries.isEmpty) {
       chargeEntries = [_newChargeEntry()];
@@ -1756,7 +1833,7 @@ class AppController extends ChangeNotifier {
   List<JournalRow> profitRows() {
     return applyProfitThirdParty(
       buildProfitJournalRows(currentProfitPaste()),
-      profitAccount: chartRevenueProfit,
+      profitAccount: selectedProfitParty,
     );
   }
 
@@ -2029,10 +2106,10 @@ class AppController extends ChangeNotifier {
       detail['oppositeAccountID'] = corresponding;
       party = AccountThirdParty(
         id: corresponding,
-        code: party.code.isNotEmpty ? party.code : chartRevenueProfit.code,
+        code: party.code.isNotEmpty ? party.code : selectedProfitParty.code,
         name: row.thirdPartyName.isNotEmpty
             ? row.thirdPartyName
-            : (party.name.isNotEmpty ? party.name : chartRevenueProfit.name),
+            : (party.name.isNotEmpty ? party.name : selectedProfitParty.name),
       );
     }
     applyAccountThirdPartyFields(detail, party);
@@ -2570,7 +2647,7 @@ class AppController extends ChangeNotifier {
         await hydrateProfitAccounts(workingRows.map((r) => r.account));
         workingRows = applyProfitThirdParty(
           buildProfitJournalRows(currentProfitPaste()),
-          profitAccount: chartRevenueProfit,
+          profitAccount: selectedProfitParty,
         );
         final missing = workingRows
             .map((r) => normalizeAccountKey(r.account))
@@ -2786,7 +2863,7 @@ class AppController extends ChangeNotifier {
     final paste = [for (final group in pending) _profitPasteFromGroup(group)];
     final rebuilt = applyProfitThirdParty(
       buildProfitJournalRows(paste),
-      profitAccount: chartRevenueProfit,
+      profitAccount: selectedProfitParty,
     );
     var resolved = Map<String, dynamic>.from(prepared.resolved);
     final missing = rebuilt
