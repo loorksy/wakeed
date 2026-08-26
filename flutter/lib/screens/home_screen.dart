@@ -245,13 +245,14 @@ class _BatchTabState extends State<BatchTab> {
           ),
           const SizedBox(height: 8),
           PreviewTable(
-            columns: const ['#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
+            columns: const ['#', 'البيان', 'حساب', 'طرف ثالث', 'مدين', 'دائن', 'محلول'],
             rows: [
               for (var i = 0; i < rows.length; i++)
                 [
                   '${i + 1}',
                   app.composeNote(rows[i].description, app.sectionNote('batch')),
                   rows[i].account,
+                  app.thirdPartyCell(rows[i]),
                   formatJournalAmount(rows[i], debit: true),
                   formatJournalAmount(rows[i], debit: false),
                   app.resolvedLabel(app.resolvedBatch, rows[i].account),
@@ -307,6 +308,7 @@ class _EachTabState extends State<EachTab> {
           '$lineNo',
           app.composeNote(row.description, app.sectionNote('each')),
           row.account,
+          app.thirdPartyCell(row),
           formatJournalAmount(row, debit: true),
           formatJournalAmount(row, debit: false),
           app.resolvedLabel(app.resolvedEach, row.account),
@@ -381,7 +383,7 @@ class _EachTabState extends State<EachTab> {
           ),
           const SizedBox(height: 8),
           PreviewTable(
-            columns: const ['سند', '#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
+            columns: const ['سند', '#', 'البيان', 'حساب', 'طرف ثالث', 'مدين', 'دائن', 'محلول'],
             rows: tableRows,
           ),
         ],
@@ -409,6 +411,7 @@ class ManualTab extends StatelessWidget {
           '$lineNo',
           app.composeNote(row.description, row.clientNote),
           row.account,
+          app.thirdPartyCell(row),
           formatJournalAmount(row, debit: true),
           formatJournalAmount(row, debit: false),
           app.resolvedLabel(app.resolvedManual, row.account),
@@ -460,7 +463,7 @@ class ManualTab extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           PreviewTable(
-            columns: const ['سند', '#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
+            columns: const ['سند', '#', 'البيان', 'حساب', 'طرف ثالث', 'مدين', 'دائن', 'محلول'],
             rows: tableRows,
           ),
         ],
@@ -625,6 +628,7 @@ class ChargeTab extends StatelessWidget {
           '$lineNo',
           app.composeNote(row.description, row.clientNote),
           row.account,
+          app.thirdPartyCell(row),
           formatJournalAmount(row, debit: true),
           formatJournalAmount(row, debit: false),
           app.resolvedLabel(app.resolvedCharge, row.account),
@@ -647,7 +651,7 @@ class ChargeTab extends StatelessWidget {
           const DefaultAccountsCard(title: 'حسابات افتراضية — شحن'),
           const SizedBox(height: 4),
           Text(
-            'يُعبَّأ المدين والدائن من الافتراضي. يمكن تغييرهما لكل سند. الطرف الثالث يظهر من وكيد.',
+            'يُعبَّأ المدين والدائن من الافتراضي. يمكن تغييرهما لكل سند. الطرف الثالث دائماً حساب الإيرادات، وليس الدائن.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -682,7 +686,7 @@ class ChargeTab extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           PreviewTable(
-            columns: const ['سند', '#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
+            columns: const ['سند', '#', 'البيان', 'حساب', 'طرف ثالث', 'مدين', 'دائن', 'محلول'],
             rows: tableRows,
           ),
         ],
@@ -912,7 +916,7 @@ class _ProfitTabState extends State<ProfitTab> {
             }
             return account;
           }(),
-          rows[i].balancing ? app.profitBoxLabelForRow(rows, rows[i]) : '',
+          app.thirdPartyCell(rows[i]),
           _profitAmountCell(rows[i].debit, rows[i]),
           _profitAmountCell(rows[i].credit, rows[i]),
           app.resolvedLabel(app.resolvedProfit, rows[i].account),

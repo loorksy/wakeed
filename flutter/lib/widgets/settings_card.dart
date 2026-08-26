@@ -127,6 +127,17 @@ class SettingsCard extends StatelessWidget {
               ),
             ],
           ),
+          if (app.chartRevenueProfit.label.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'صندوق الربح / الطرف الثالث في كل التبويبات: ${app.chartRevenueProfit.label} — وليس الدائن.',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: WakeedColors.accent),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -238,7 +249,7 @@ class DefaultAccountsCard extends StatelessWidget {
   const DefaultAccountsCard({
     super.key,
     this.title = 'حسابات افتراضية — سند فردي',
-    this.subtitle = 'يُعبَّأ المدين والدائن تلقائياً في السند الجديد، ويظهر الطرف الثالث من وكيد.',
+    this.subtitle = 'يُعبَّأ المدين والدائن تلقائياً. الطرف الثالث دائماً حساب الإيرادات (عمولة الحوالات)، وليس الدائن.',
   });
 
   final String title;

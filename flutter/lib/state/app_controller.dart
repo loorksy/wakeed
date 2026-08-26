@@ -846,24 +846,23 @@ class AppController extends ChangeNotifier {
     return 'يُحمَّل الدليل بعد الدخول';
   }
 
-  AccountThirdParty thirdPartyForAccountCode(String code) {
-    return pickAccountThirdParty(_accountByCode(normalizeAccountKey(code)));
-  }
-
-  AccountThirdParty profitAccountFor(String code) {
+  AccountThirdParty postingThirdPartyFor(String accountCode) {
     final tp = chartRevenueProfit;
-    if (tp.isEmpty || tp.matchesAccountCode(code)) return const AccountThirdParty();
+    if (tp.isEmpty || tp.matchesAccountCode(accountCode)) return const AccountThirdParty();
     return tp;
   }
 
-  String thirdPartyLabelFor(String code) {
-    final party = thirdPartyForAccountCode(code);
-    if (party.label.isNotEmpty) return party.label;
-    if (party.id.isEmpty) return '';
-    for (final acc in accounts) {
-      if (pickId(acc) == party.id) return accountLabel(acc);
-    }
-    return '';
+  AccountThirdParty thirdPartyForAccountCode(String code) {
+    return postingThirdPartyFor(code);
+  }
+
+  AccountThirdParty profitAccountFor(String code) => postingThirdPartyFor(code);
+
+  String thirdPartyLabelFor(String code) => postingThirdPartyFor(code).label;
+
+  String thirdPartyCell(JournalRow row) {
+    if (row.thirdPartyName.isNotEmpty) return row.thirdPartyName;
+    return postingThirdPartyFor(row.account).label;
   }
 
   String profitBeneficiaryLabel({String credit = '', String debit = ''}) {
@@ -2022,18 +2021,19 @@ class AppController extends ChangeNotifier {
       detail['costCenterID'] = extras['costCenterId'];
     }
     final corresponding = extras['correspondingId']?.toString() ?? '';
-    final isProfit = extras['section'] == 'profit';
-    var party = isProfit ? const AccountThirdParty() : pickAccountThirdParty(account);
+    var party = postingThirdPartyFor(
+      pickAccountCode(account).isNotEmpty ? pickAccountCode(account) : row.account,
+    );
     if (corresponding.isNotEmpty) {
       detail['correspondingAccountID'] = corresponding;
       detail['oppositeAccountID'] = corresponding;
       party = AccountThirdParty(
         id: corresponding,
-        code: party.code,
-        name: row.thirdPartyName.isNotEmpty ? row.thirdPartyName : party.name,
+        code: party.code.isNotEmpty ? party.code : chartRevenueProfit.code,
+        name: row.thirdPartyName.isNotEmpty
+            ? row.thirdPartyName
+            : (party.name.isNotEmpty ? party.name : chartRevenueProfit.name),
       );
-    } else if (isProfit) {
-      party = const AccountThirdParty();
     }
     applyAccountThirdPartyFields(detail, party);
     return detail;
@@ -2071,10 +2071,13 @@ class AppController extends ChangeNotifier {
       var correspondingId = '';
       if (row.correspondingIdOverride.isNotEmpty) {
         correspondingId = row.correspondingIdOverride;
-      } else if (section == 'profit') {
-        correspondingId = '';
-      } else if (useOpposite && opposite != null) {
-        correspondingId = pickId(resolved[normalizeAccountKey(opposite.account)]);
+      } else {
+        final tp = postingThirdPartyFor(row.account);
+        if (tp.id.isNotEmpty) {
+          correspondingId = tp.id;
+        } else if (section != 'profit' && useOpposite && opposite != null) {
+          correspondingId = pickId(resolved[normalizeAccountKey(opposite.account)]);
+        }
       }
       final lineExtra = lineNote ??
           ((section == 'manual' || section == 'charge' || section == 'profit')
@@ -2680,14 +2683,6 @@ class AppController extends ChangeNotifier {
       () => previewAndResolve('each', forSubmit: true, source: 'charge'),
       'يتم الآن تسجيل سندات الشحن في وكيد. يرجى الانتظار.',
     );
-  }
-
-  String profitBoxLabelForRow(List<JournalRow> rows, JournalRow line) {
-    if (!line.balancing) return '';
-    if (line.thirdPartyName.isNotEmpty) return line.thirdPartyName;
-    final tp = chartRevenueProfit;
-    if (tp.isEmpty) return '';
-    return tp.label;
   }
 
   String profitPartyLabel(ProfitPasteRow row) {
