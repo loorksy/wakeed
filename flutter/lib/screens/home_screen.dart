@@ -1203,7 +1203,6 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
     final creditBase = amountToBaseFromQuote(c, creditQ);
     final debitBase = amountToBaseFromQuote(d, debitQ);
     final profit = roundMoney(debitBase - creditBase);
-    final debitWho = app.chartAccountName(debitCtrl.text);
     final baseSymbol = app.baseCurrencyQuote().symbol;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -1222,6 +1221,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    final who = app.profitBeneficiaryLabel(credit: creditCtrl.text, debit: debitCtrl.text);
                     Text(
                       '${profitKindLabel(profit)} ${formatProfitSigned(profit)} $baseSymbol',
                       style: TextStyle(
@@ -1234,9 +1234,9 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                                 : WakeedColors.accent,
                       ),
                     ),
-                    if (debitWho.isNotEmpty)
+                    if (who.isNotEmpty)
                       Text(
-                        debitWho,
+                        profitForLabel(profit, who),
                         style: TextStyle(
                           fontSize: 11,
                           color: profit > 0.001

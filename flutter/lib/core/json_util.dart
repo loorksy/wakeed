@@ -262,6 +262,14 @@ dynamic _nestedThirdParty(dynamic acc) {
     'ownerAccount',
     'DefaultThirdParty',
     'defaultThirdParty',
+    'Party',
+    'party',
+    'PartyAccount',
+    'partyAccount',
+    'Agent',
+    'agent',
+    'AgentAccount',
+    'agentAccount',
   ]) {
     final v = acc[key];
     if (v is Map && (pickId(v).isNotEmpty || pickAccountCode(v).isNotEmpty || accountNameOf(v).isNotEmpty)) {
@@ -313,6 +321,15 @@ AccountThirdParty pickAccountThirdParty(dynamic acc) {
       'ownerAccountId',
       'DefaultThirdPartyId',
       'defaultThirdPartyId',
+      'PartyId',
+      'partyId',
+      'PartyID',
+      'PartyAccountId',
+      'partyAccountId',
+      'AgentId',
+      'agentId',
+      'AgentAccountId',
+      'agentAccountId',
     ]);
   }
   if (code.isEmpty) {

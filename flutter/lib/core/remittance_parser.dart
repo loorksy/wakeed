@@ -741,7 +741,7 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
 }
 
 /// Directs the profit/كسر line to the third party assigned on the account
-/// owner in Wakeed, instead of leaving it on the debit/credit pair.
+/// owner in Wakeed (صاحب الحساب = the credit account), never to the creditor.
 List<JournalRow> applyProfitThirdParty(
   List<JournalRow> rows, {
   required AccountThirdParty Function(String accountCode) thirdPartyOf,
@@ -751,30 +751,31 @@ List<JournalRow> applyProfitThirdParty(
   final groups = groupRowsByKey(rows);
   final out = <JournalRow>[];
   for (final group in groups) {
-    JournalRow? owner;
+    JournalRow? credit;
+    JournalRow? debit;
     for (final row in group.rows) {
-      if (!row.balancing && row.debit.isNotEmpty) {
-        owner = row;
+      if (row.balancing) continue;
+      if (credit == null && row.credit.isNotEmpty) credit = row;
+      if (debit == null && row.debit.isNotEmpty) debit = row;
+    }
+    AccountThirdParty tp = const AccountThirdParty();
+    for (final row in [credit, debit]) {
+      if (row == null) continue;
+      final found = thirdPartyOf(row.account);
+      if (!found.isEmpty) {
+        tp = found;
         break;
       }
     }
-    if (owner == null) {
-      for (final row in group.rows) {
-        if (!row.balancing) {
-          owner = row;
-          break;
-        }
-      }
-    }
-    final tp = owner == null ? const AccountThirdParty() : thirdPartyOf(owner.account);
-    final ownerId = owner == null ? '' : (ownerIdOf?.call(owner.account) ?? '');
     for (final row in group.rows) {
       final copy = row.copy();
-      if (row.balancing && !tp.isEmpty) {
-        if (tp.code.isNotEmpty) copy.account = tp.code;
-        if (tp.id.isNotEmpty) copy.accountIdOverride = tp.id;
-        if (ownerId.isNotEmpty) copy.correspondingIdOverride = ownerId;
+      if (!tp.isEmpty) {
+        if (tp.id.isNotEmpty) copy.correspondingIdOverride = tp.id;
         copy.thirdPartyName = tp.label;
+        if (row.balancing) {
+          if (tp.code.isNotEmpty) copy.account = tp.code;
+          if (tp.id.isNotEmpty) copy.accountIdOverride = tp.id;
+        }
       }
       out.add(copy);
     }

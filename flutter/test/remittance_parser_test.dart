@@ -175,12 +175,12 @@ void main() {
       final applied = applyProfitThirdParty(
         rows,
         thirdPartyOf: (code) {
-          if (code == '555') {
+          if (code == '9830') {
             return const AccountThirdParty(id: 'tp-1', code: '4001', name: 'أرباح الحوالات');
           }
           return const AccountThirdParty();
         },
-        ownerIdOf: (code) => code == '555' ? 'owner-555' : '',
+        ownerIdOf: (code) => code == '9830' ? 'owner-9830' : '',
       );
       expect(applied.length, 3);
       expect(applied[1].account, '9830');
@@ -190,9 +190,12 @@ void main() {
       expect(profitLine.account, isNot('9830'));
       expect(profitLine.account, '4001');
       expect(profitLine.accountIdOverride, 'tp-1');
-      expect(profitLine.correspondingIdOverride, 'owner-555');
+      expect(profitLine.correspondingIdOverride, 'tp-1');
       expect(profitLine.credit, '100');
       expect(profitLine.thirdPartyName, contains('أرباح'));
+      expect(applied[0].correspondingIdOverride, 'tp-1');
+      expect(applied[1].correspondingIdOverride, 'tp-1');
+      expect(applied[1].account, '9830');
     });
 
     test('keeps profit on the debit account when Wakeed has no third party', () {

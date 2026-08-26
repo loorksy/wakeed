@@ -98,14 +98,16 @@ void main() {
       expect(party.name, 'عمولة');
     });
 
-    test('ignores a third party that is the account itself', () {
+    test('reads PartyId on the Wakeed account card', () {
       final party = pickAccountThirdParty({
-        'Id': 'acc-555',
-        'AccountCode': '555',
-        'ThirdPartyId': 'acc-555',
-        'ThirdPartyCode': '555',
+        'Id': 'acc-9830',
+        'AccountCode': '9830',
+        'PartyId': 'tp-22',
+        'Party': {'Id': 'tp-22', 'AccountCode': '4001', 'AccountName': 'عمولة الحوالة'},
       });
-      expect(party.isEmpty, true);
+      expect(party.id, 'tp-22');
+      expect(party.code, '4001');
+      expect(party.name, 'عمولة الحوالة');
     });
   });
 }
