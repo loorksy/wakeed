@@ -174,6 +174,7 @@ class DebitAccountField extends StatelessWidget {
                         ),
                       ),
                     ),
+                    ThirdPartyCaption(accountCode: app.debitAccount),
                   ],
                 ),
               ),
@@ -185,6 +186,111 @@ class DebitAccountField extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class CreditAccountField extends StatelessWidget {
+  const CreditAccountField({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            [
+              'حساب الدائن',
+              if (app.currencyQuoteForAccount(app.creditAccount).badge.isNotEmpty)
+                app.currencyQuoteForAccount(app.creditAccount).badge,
+            ].join(' '),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WakeedColors.green),
+          ),
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: () => showAccountPicker(context, target: AccountPickTarget.defaultCredit()),
+            child: InputDecorator(
+              decoration: partyFieldDecoration(
+                debit: false,
+                base: SettingsCard.dense,
+                suffixIcon: Icon(Icons.account_tree_outlined, size: 18, color: WakeedColors.green),
+                suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+              child: Text(
+                app.creditAccountLabel(),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: WakeedColors.green, fontSize: 12),
+              ),
+            ),
+          ),
+          ThirdPartyCaption(accountCode: app.creditAccount),
+        ],
+      ),
+    );
+  }
+}
+
+class DefaultAccountsCard extends StatelessWidget {
+  const DefaultAccountsCard({super.key, this.title = 'حسابات افتراضية — سند فردي'});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text(
+              'يُعبَّأ المدين والدائن تلقائياً في السند الجديد، ويظهر الطرف الثالث من وكيد.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            const DebitAccountField(),
+            const CreditAccountField(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonal(
+                onPressed: app.savePartyDefaults,
+                child: const Text('حفظ المدين والدائن كافتراضي'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ThirdPartyCaption extends StatelessWidget {
+  const ThirdPartyCaption({super.key, required this.accountCode});
+
+  final String accountCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    final label = app.thirdPartyLabelFor(accountCode);
+    if (label.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        'طرف ثالث: $label',
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: WakeedColors.accent),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wakeed_app/core/json_util.dart';
 import 'package:wakeed_app/core/remittance_parser.dart';
 
 void main() {
@@ -163,6 +164,51 @@ void main() {
       expect(groups.length, 2);
       expect(groups[0].name, 'ا');
       expect(groups[1].name, 'ب');
+    });
+
+    test('does not post profit to the creditor; third party of the account owner is used', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
+        ],
+      );
+      final applied = applyProfitThirdParty(
+        rows,
+        thirdPartyOf: (code) {
+          if (code == '555') {
+            return const AccountThirdParty(id: 'tp-1', code: '4001', name: 'أرباح الحوالات');
+          }
+          return const AccountThirdParty();
+        },
+        ownerIdOf: (code) => code == '555' ? 'owner-555' : '',
+      );
+      expect(applied.length, 3);
+      expect(applied[1].account, '9830');
+      expect(applied[1].balancing, false);
+      final profitLine = applied[2];
+      expect(profitLine.balancing, true);
+      expect(profitLine.account, isNot('9830'));
+      expect(profitLine.account, '4001');
+      expect(profitLine.accountIdOverride, 'tp-1');
+      expect(profitLine.correspondingIdOverride, 'owner-555');
+      expect(profitLine.credit, '100');
+      expect(profitLine.thirdPartyName, contains('أرباح'));
+    });
+
+    test('keeps profit on the debit account when Wakeed has no third party', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
+        ],
+      );
+      final applied = applyProfitThirdParty(
+        rows,
+        thirdPartyOf: (_) => const AccountThirdParty(),
+        ownerIdOf: (_) => 'owner-555',
+      );
+      expect(applied[2].account, '555');
+      expect(applied[2].accountIdOverride, '');
+      expect(applied[2].correspondingIdOverride, '');
     });
   });
 

@@ -34,7 +34,9 @@ class AppController extends ChangeNotifier {
   String username = '';
   String ownerKey = '';
   String debitAccount = '';
+  String creditAccount = '';
   String pendingDebitCode = '';
+  String pendingCreditCode = '';
   String debitHawalaRate = '';
   String entryDate = todayInputValue();
   String journalTypeId = '';
@@ -70,6 +72,7 @@ class AppController extends ChangeNotifier {
   dynamic sampleEntry;
   List<dynamic> accounts = [];
   Map<String, String> debitDefaults = {};
+  Map<String, String> creditDefaults = {};
   String journalPostPath = '';
   final Map<String, dynamic> accountCache = {};
   List<WakeedSubscription> subscriptions = [];
@@ -410,6 +413,7 @@ class AppController extends ChangeNotifier {
       await connect();
     } else {
       fillDebitAccounts();
+      fillCreditAccounts();
     }
     _emit();
   }
@@ -444,8 +448,10 @@ class AppController extends ChangeNotifier {
       'ownerKey': ownerKey,
       'username': username,
       'debitAccount': debitAccount,
+      'creditAccount': creditAccount,
       'debitHawalaRate': '',
       'debitDefaults': debitDefaults,
+      'creditDefaults': creditDefaults,
       'notes': notesBatch,
       'notesEach': notesEach,
       'table': tableBatch,
@@ -489,7 +495,11 @@ class AppController extends ChangeNotifier {
       if (settings['debitDefaults'] is Map) {
         debitDefaults = (settings['debitDefaults'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
       }
+      if (settings['creditDefaults'] is Map) {
+        creditDefaults = (settings['creditDefaults'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
+      }
       if (settings['debitAccount'] != null) pendingDebitCode = settings['debitAccount'].toString();
+      if (settings['creditAccount'] != null) pendingCreditCode = settings['creditAccount'].toString();
       debitHawalaRate = '';
       if (settings['notes'] != null) notesBatch = settings['notes'].toString();
       if (settings['notesEach'] != null) notesEach = settings['notesEach'].toString();
@@ -610,6 +620,7 @@ class AppController extends ChangeNotifier {
           if (code.isNotEmpty) accountCache[code] = acc;
         }
         fillDebitAccounts();
+        fillCreditAccounts();
       }
       await _fillMissingCurrencies();
 
@@ -718,6 +729,7 @@ class AppController extends ChangeNotifier {
       if (code.isNotEmpty) accountCache[code] = acc;
     }
     fillDebitAccounts();
+    fillCreditAccounts();
   }
 
   String preferredDebitCode() {
@@ -726,6 +738,16 @@ class AppController extends ChangeNotifier {
       return debitDefaults[owner]!;
     }
     return pendingDebitCode;
+  }
+
+  String preferredCreditCode() {
+    final owner = currentOwnerKey();
+    if (owner.isNotEmpty && creditDefaults[owner] != null && creditDefaults[owner]!.isNotEmpty) {
+      return creditDefaults[owner]!;
+    }
+    if (pendingCreditCode.isNotEmpty) return pendingCreditCode;
+    if (creditAccount.isNotEmpty) return creditAccount;
+    return defaultCreditAccount;
   }
 
   void fillDebitAccounts() {
@@ -742,12 +764,52 @@ class AppController extends ChangeNotifier {
     _emit();
   }
 
+  void fillCreditAccounts() {
+    final preferred = preferredCreditCode();
+    if (preferred.isNotEmpty && accounts.any((a) => pickAccountCode(a) == preferred)) {
+      creditAccount = preferred;
+    } else if (creditAccount.isEmpty && accounts.isNotEmpty) {
+      final fallback = accounts.firstWhere(
+        (a) => pickAccountCode(a) == defaultCreditAccount,
+        orElse: () => accounts.first,
+      );
+      creditAccount = pickAccountCode(fallback);
+    }
+    _emit();
+  }
+
   String debitAccountLabel() {
-    final selected = accounts.where((a) => pickAccountCode(a) == debitAccount).toList();
+    return _accountCodeLabel(debitAccount);
+  }
+
+  String creditAccountLabel() {
+    return _accountCodeLabel(creditAccount, emptyHint: 'اختر حساب الدائن');
+  }
+
+  String _accountCodeLabel(String code, {String emptyHint = 'اختر من دليل الحسابات'}) {
+    final selected = accounts.where((a) => pickAccountCode(a) == code).toList();
     if (selected.isNotEmpty) return accountLabel(selected.first);
-    if (debitAccount.isNotEmpty) return debitAccount;
-    if (accounts.isNotEmpty) return 'اختر من دليل الحسابات';
+    if (code.isNotEmpty) return code;
+    if (accounts.isNotEmpty) return emptyHint;
     return 'يُحمَّل الدليل بعد الدخول';
+  }
+
+  AccountThirdParty thirdPartyForAccountCode(String code) {
+    return pickAccountThirdParty(_accountByCode(normalizeAccountKey(code)));
+  }
+
+  String thirdPartyLabelFor(String code) {
+    final party = thirdPartyForAccountCode(code);
+    if (party.label.isNotEmpty) return party.label;
+    if (party.id.isEmpty) return '';
+    for (final acc in accounts) {
+      if (pickId(acc) == party.id) return accountLabel(acc);
+    }
+    return '';
+  }
+
+  String accountIdForCode(String code) {
+    return pickId(_accountByCode(normalizeAccountKey(code)));
   }
 
   bool _accountCodeMatches(String left, String right) {
@@ -981,9 +1043,17 @@ class AppController extends ChangeNotifier {
   }
 
   String debitDefaultHint() {
+    return _defaultHint(debitDefaults, 'لم يُحفظ مدين افتراضي بعد.');
+  }
+
+  String creditDefaultHint() {
+    return _defaultHint(creditDefaults, 'لم يُحفظ دائن افتراضي بعد.');
+  }
+
+  String _defaultHint(Map<String, String> defaults, String empty) {
     final owner = currentOwnerKey();
-    final code = owner.isNotEmpty ? debitDefaults[owner] : null;
-    if (code == null || code.isEmpty) return 'لم يُحفظ افتراضي بعد.';
+    final code = owner.isNotEmpty ? defaults[owner] : null;
+    if (code == null || code.isEmpty) return empty;
     final acc = accounts.where((a) => pickAccountCode(a) == code).toList();
     return 'الافتراضي: ${acc.isNotEmpty ? accountLabel(acc.first) : code}';
   }
@@ -998,24 +1068,100 @@ class AppController extends ChangeNotifier {
     _emit();
   }
 
+  void selectCreditAccount(String code) {
+    final value = code.trim();
+    if (value.isEmpty) return;
+    creditAccount = value;
+    pendingCreditCode = value;
+    saveLocal();
+    _emit();
+  }
+
   List<JournalRow> withAccountFx(List<JournalRow> rows) {
     return applyRemittanceFx(rows, currencyQuoteForAccount);
   }
 
   void saveDebitDefault() {
-    final code = debitAccount.trim();
+    _savePartyDefault(
+      code: debitAccount.trim(),
+      into: debitDefaults,
+      emptyTitle: 'حساب المدين الافتراضي',
+      successDetail: debitAccountLabel(),
+    );
+  }
+
+  void saveCreditDefault() {
+    _savePartyDefault(
+      code: creditAccount.trim(),
+      into: creditDefaults,
+      emptyTitle: 'حساب الدائن الافتراضي',
+      successDetail: creditAccountLabel(),
+    );
+  }
+
+  void savePartyDefaults() {
+    final debit = debitAccount.trim();
+    final credit = creditAccount.trim();
     final owner = currentOwnerKey();
-    if (code.isEmpty) {
-      showSubmitError('حساب افتراضي', 'اختر حساباً من الدليل ثم احفظه كافتراضي.');
+    if (debit.isEmpty && credit.isEmpty) {
+      showSubmitError('حساب افتراضي', 'اختر حساب المدين والدائن ثم احفظهما كافتراضي.');
       return;
     }
     if (owner.isEmpty) {
       showSubmitError('غير متصل', 'سجّل الدخول أولاً.');
       return;
     }
-    debitDefaults[owner] = code;
+    if (debit.isNotEmpty) debitDefaults[owner] = debit;
+    if (credit.isNotEmpty) creditDefaults[owner] = credit;
+    pendingDebitCode = debit.isNotEmpty ? debit : pendingDebitCode;
+    pendingCreditCode = credit.isNotEmpty ? credit : pendingCreditCode;
+    _fillEmptyEntryAccounts();
     saveLocal();
-    showSubmitSuccess('تم الحفظ', 'تم حفظ الحساب الافتراضي.', debitAccountLabel());
+    final parts = [
+      if (debit.isNotEmpty) 'مدين ${debitAccountLabel()}',
+      if (credit.isNotEmpty) 'دائن ${creditAccountLabel()}',
+    ];
+    showSubmitSuccess('تم الحفظ', 'تم حفظ الحسابات الافتراضية لسند فردي.', parts.join(' · '));
+  }
+
+  void _savePartyDefault({
+    required String code,
+    required Map<String, String> into,
+    required String emptyTitle,
+    required String successDetail,
+  }) {
+    final owner = currentOwnerKey();
+    if (code.isEmpty) {
+      showSubmitError(emptyTitle, 'اختر حساباً من الدليل ثم احفظه كافتراضي.');
+      return;
+    }
+    if (owner.isEmpty) {
+      showSubmitError('غير متصل', 'سجّل الدخول أولاً.');
+      return;
+    }
+    into[owner] = code;
+    if (into == debitDefaults) pendingDebitCode = code;
+    if (into == creditDefaults) pendingCreditCode = code;
+    _fillEmptyEntryAccounts();
+    saveLocal();
+    showSubmitSuccess('تم الحفظ', 'تم حفظ الحساب الافتراضي.', successDetail);
+  }
+
+  void _fillEmptyEntryAccounts() {
+    final debit = preferredDebitCode().isNotEmpty ? preferredDebitCode() : debitAccount;
+    final credit = preferredCreditCode();
+    for (final e in manualEntries) {
+      if (e.credit.trim().isEmpty && credit.isNotEmpty) e.credit = credit;
+    }
+    for (final e in chargeEntries) {
+      if (e.debit.trim().isEmpty && debit.isNotEmpty) e.debit = debit;
+      if (e.credit.trim().isEmpty && credit.isNotEmpty) e.credit = credit;
+    }
+    for (final e in profitEntries) {
+      if (e.debit.trim().isEmpty && debit.isNotEmpty) e.debit = debit;
+      if (e.credit.trim().isEmpty && credit.isNotEmpty) e.credit = credit;
+    }
+    _emit();
   }
 
   List<dynamic> filteredAccounts(String filter) {
@@ -1152,7 +1298,7 @@ class AppController extends ChangeNotifier {
   List<JournalRow> currentRows(String source) {
     final debitAcc = debitAccount.trim();
     final text = source == 'each' ? tableEach : tableBatch;
-    return withAccountFx(parseRowsFromTable(text, debitAcc, defaultCreditAccount));
+    return withAccountFx(parseRowsFromTable(text, debitAcc, preferredCreditCode()));
   }
 
   Map<String, num> totals(List<JournalRow> rows) {
@@ -1200,13 +1346,18 @@ class AppController extends ChangeNotifier {
 
   void ensureChargeEntries() {
     if (chargeEntries.isEmpty) {
-      chargeEntries = [ManualEntry(id: manualEntryId())];
+      chargeEntries = [_newChargeEntry()];
+      return;
+    }
+    for (final e in chargeEntries) {
+      if (e.debit.trim().isEmpty) e.debit = preferredDebitCode().isNotEmpty ? preferredDebitCode() : debitAccount;
+      if (e.credit.trim().isEmpty) e.credit = preferredCreditCode();
     }
   }
 
   void addChargeEntry() {
     ensureChargeEntries();
-    chargeEntries.add(ManualEntry(id: manualEntryId()));
+    chargeEntries.add(_newChargeEntry());
     saveLocal();
     _emit();
   }
@@ -1254,20 +1405,27 @@ class AppController extends ChangeNotifier {
   }
 
   void clearChargeForm() {
-    chargeEntries = [ManualEntry(id: manualEntryId())];
+    chargeEntries = [_newChargeEntry()];
     saveLocal();
     _emit();
   }
 
   void ensureProfitEntries() {
     if (profitEntries.isEmpty) {
-      profitEntries = [ProfitEntry(id: manualEntryId())];
+      profitEntries = [_newProfitEntry()];
+      return;
+    }
+    for (final e in profitEntries) {
+      if (e.debit.trim().isEmpty) {
+        e.debit = preferredDebitCode().isNotEmpty ? preferredDebitCode() : debitAccount;
+      }
+      if (e.credit.trim().isEmpty) e.credit = preferredCreditCode();
     }
   }
 
   void addProfitEntry() {
     ensureProfitEntries();
-    profitEntries.add(ProfitEntry(id: manualEntryId()));
+    profitEntries.add(_newProfitEntry());
     saveLocal();
     _emit();
   }
@@ -1289,7 +1447,7 @@ class AppController extends ChangeNotifier {
 
   void clearProfitForm() {
     if (profitMode == 'each') {
-      profitEntries = [ProfitEntry(id: manualEntryId())];
+      profitEntries = [_newProfitEntry()];
     } else {
       notesProfit = '';
       tableProfit = '';
@@ -1380,18 +1538,51 @@ class AppController extends ChangeNotifier {
   }
 
   List<JournalRow> profitRows() {
-    return buildProfitJournalRows(currentProfitPaste());
+    return applyProfitThirdParty(
+      buildProfitJournalRows(currentProfitPaste()),
+      thirdPartyOf: thirdPartyForAccountCode,
+      ownerIdOf: accountIdForCode,
+    );
+  }
+
+  ManualEntry _newManualEntry() {
+    return ManualEntry(
+      id: manualEntryId(),
+      credit: preferredCreditCode(),
+    );
+  }
+
+  ProfitEntry _newProfitEntry() {
+    final debit = preferredDebitCode().isNotEmpty ? preferredDebitCode() : debitAccount;
+    return ProfitEntry(
+      id: manualEntryId(),
+      debit: debit,
+      credit: preferredCreditCode(),
+    );
+  }
+
+  ManualEntry _newChargeEntry() {
+    final debit = preferredDebitCode().isNotEmpty ? preferredDebitCode() : debitAccount;
+    return ManualEntry(
+      id: manualEntryId(),
+      debit: debit,
+      credit: preferredCreditCode(),
+    );
   }
 
   void ensureManualEntries() {
     if (manualEntries.isEmpty) {
-      manualEntries = [ManualEntry(id: manualEntryId())];
+      manualEntries = [_newManualEntry()];
+      return;
+    }
+    for (final e in manualEntries) {
+      if (e.credit.trim().isEmpty) e.credit = preferredCreditCode();
     }
   }
 
   void addManualEntry() {
     ensureManualEntries();
-    manualEntries.add(ManualEntry(id: manualEntryId()));
+    manualEntries.add(_newManualEntry());
     saveLocal();
     _emit();
   }
@@ -1536,7 +1727,7 @@ class AppController extends ChangeNotifier {
   }
 
   void clearManualForm() {
-    manualEntries = [ManualEntry(id: manualEntryId())];
+    manualEntries = [_newManualEntry()];
     resolvedManual = null;
     saveLocal();
     _emit();
@@ -1579,7 +1770,7 @@ class AppController extends ChangeNotifier {
         ? hawalaPostRate(hawala)
         : (baseRate == 0 ? 1 : baseRate);
     final equivalent = amountToBase(amount, row.rate.trim().isNotEmpty ? hawala : 1);
-    final accountId = pickId(account);
+    final accountId = row.accountIdOverride.isNotEmpty ? row.accountIdOverride : pickId(account);
     final note = extras['lineNote'] ??
         composeNote(
           row.description,
@@ -1618,6 +1809,8 @@ class AppController extends ChangeNotifier {
       detail['correspondingAccountID'] = extras['correspondingId'];
       detail['oppositeAccountID'] = extras['correspondingId'];
     }
+    final party = pickAccountThirdParty(account);
+    applyAccountThirdPartyFields(detail, party);
     return detail;
   }
 
@@ -1650,9 +1843,12 @@ class AppController extends ChangeNotifier {
       final opposite = section == 'profit' ? _profitOpposite(row, rows) : (i % 2 == 0
           ? (i + 1 < rows.length ? rows[i + 1] : null)
           : rows[i - 1]);
-      final correspondingId = useOpposite && opposite != null
-          ? pickId(resolved[normalizeAccountKey(opposite.account)])
-          : '';
+      var correspondingId = '';
+      if (row.correspondingIdOverride.isNotEmpty) {
+        correspondingId = row.correspondingIdOverride;
+      } else if (!(section == 'profit' && row.balancing) && useOpposite && opposite != null) {
+        correspondingId = pickId(resolved[normalizeAccountKey(opposite.account)]);
+      }
       final lineExtra = lineNote ??
           ((section == 'manual' || section == 'charge' || section == 'profit')
               ? row.clientNote
@@ -2336,7 +2532,11 @@ class AppController extends ChangeNotifier {
     }
     final skipNote = skipped.isNotEmpty ? '\n(${skipped.length} سنداً موجود مسبقاً في السجل — تم تخطيهم)' : '';
     final paste = [for (final group in pending) _profitPasteFromGroup(group)];
-    final rebuilt = buildProfitJournalRows(paste);
+    final rebuilt = applyProfitThirdParty(
+      buildProfitJournalRows(paste),
+      thirdPartyOf: thirdPartyForAccountCode,
+      ownerIdOf: accountIdForCode,
+    );
     var resolved = Map<String, dynamic>.from(prepared.resolved);
     final missing = rebuilt
         .map((r) => normalizeAccountKey(r.account))

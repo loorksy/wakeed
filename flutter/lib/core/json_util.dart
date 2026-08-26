@@ -230,6 +230,133 @@ num numOf(dynamic v) {
   return n;
 }
 
+class AccountThirdParty {
+  const AccountThirdParty({this.id = '', this.code = '', this.name = ''});
+
+  final String id;
+  final String code;
+  final String name;
+
+  bool get isEmpty => id.isEmpty && code.isEmpty;
+
+  String get label {
+    if (name.isNotEmpty && code.isNotEmpty) return '$code — $name';
+    if (name.isNotEmpty) return name;
+    if (code.isNotEmpty) return code;
+    return '';
+  }
+}
+
+dynamic _nestedThirdParty(dynamic acc) {
+  if (acc is! Map) return null;
+  for (final key in const [
+    'ThirdParty',
+    'thirdParty',
+    'ThirdPartyAccount',
+    'thirdPartyAccount',
+    'RelatedAccount',
+    'relatedAccount',
+    'AccountOwner',
+    'accountOwner',
+    'OwnerAccount',
+    'ownerAccount',
+    'DefaultThirdParty',
+    'defaultThirdParty',
+  ]) {
+    final v = acc[key];
+    if (v is Map && (pickId(v).isNotEmpty || pickAccountCode(v).isNotEmpty || accountNameOf(v).isNotEmpty)) {
+      return v;
+    }
+  }
+  return null;
+}
+
+String _firstNonEmpty(dynamic acc, List<String> keys) {
+  if (acc is! Map) return '';
+  for (final key in keys) {
+    final v = acc[key];
+    if (v == null) continue;
+    final text = v.toString().trim();
+    if (text.isNotEmpty && text != '0') return text;
+  }
+  return '';
+}
+
+/// Third party assigned to an account card in Wakeed (صاحب الحساب).
+AccountThirdParty pickAccountThirdParty(dynamic acc) {
+  if (acc is! Map) return const AccountThirdParty();
+  final nested = _nestedThirdParty(acc);
+  var id = '';
+  var code = '';
+  var name = '';
+  if (nested is Map) {
+    id = pickId(nested);
+    code = pickAccountCode(nested);
+    name = accountNameOf(nested);
+  }
+  if (id.isEmpty) {
+    id = _firstNonEmpty(acc, const [
+      'ThirdPartyId',
+      'thirdPartyId',
+      'ThirdPartyID',
+      'thirdPartyID',
+      'ThirdPartyAccountId',
+      'thirdPartyAccountId',
+      'ThirdPartyAccountID',
+      'RelatedAccountId',
+      'relatedAccountId',
+      'RelatedAccountID',
+      'AccountOwnerId',
+      'accountOwnerId',
+      'AccountOwnerID',
+      'OwnerAccountId',
+      'ownerAccountId',
+      'DefaultThirdPartyId',
+      'defaultThirdPartyId',
+    ]);
+  }
+  if (code.isEmpty) {
+    code = _firstNonEmpty(acc, const [
+      'ThirdPartyCode',
+      'thirdPartyCode',
+      'ThirdPartyAccountCode',
+      'thirdPartyAccountCode',
+      'RelatedAccountCode',
+      'relatedAccountCode',
+      'AccountOwnerCode',
+      'accountOwnerCode',
+      'OwnerAccountCode',
+    ]);
+  }
+  if (name.isEmpty) {
+    name = _firstNonEmpty(acc, const [
+      'ThirdPartyName',
+      'thirdPartyName',
+      'ThirdPartyAccountName',
+      'thirdPartyAccountName',
+      'RelatedAccountName',
+      'relatedAccountName',
+      'AccountOwnerName',
+      'accountOwnerName',
+      'OwnerAccountName',
+    ]);
+  }
+  final selfId = pickId(acc);
+  final selfCode = pickAccountCode(acc);
+  if (selfId.isNotEmpty && id == selfId) id = '';
+  if (selfCode.isNotEmpty && code == selfCode) code = '';
+  return AccountThirdParty(id: id, code: code, name: name);
+}
+
+void applyAccountThirdPartyFields(Map<String, dynamic> detail, AccountThirdParty party) {
+  if (party.id.isEmpty) return;
+  detail['thirdPartyID'] = party.id;
+  detail['ThirdPartyId'] = party.id;
+  detail['thirdPartyId'] = party.id;
+  detail['relatedAccountID'] = party.id;
+  detail['RelatedAccountId'] = party.id;
+}
+
 String pickAccountCurrencyId(dynamic acc) {
   if (acc is! Map) return '';
   final nested = acc['Currency'] ?? acc['currency'];

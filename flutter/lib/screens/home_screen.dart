@@ -427,7 +427,7 @@ class ManualTab extends StatelessWidget {
               Text('${app.manualEntries.length}', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
-          const DebitAccountField(),
+          const DefaultAccountsCard(),
           const SizedBox(height: 8),
           for (var i = 0; i < app.manualEntries.length; i++)
             _ManualEntryCard(key: ValueKey(app.manualEntries[i].id), index: i, entry: app.manualEntries[i]),
@@ -583,6 +583,7 @@ class _ManualEntryCardState extends State<_ManualEntryCard> {
               ),
             ],
           ),
+          ThirdPartyCaption(accountCode: creditCtrl.text),
           if (mixed && amt > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(
@@ -643,8 +644,10 @@ class ChargeTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
+          const DefaultAccountsCard(title: 'حسابات افتراضية — شحن'),
+          const SizedBox(height: 4),
           Text(
-            'اختر المدين والدائن لكل سند. لا يستخدم الحساب الافتراضي.',
+            'يُعبَّأ المدين والدائن من الافتراضي. يمكن تغييرهما لكل سند. الطرف الثالث يظهر من وكيد.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -807,6 +810,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
             ],
           ),
+          ThirdPartyCaption(accountCode: debitCtrl.text),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -824,6 +828,7 @@ class _ChargeEntryCardState extends State<_ChargeEntryCard> {
               ),
             ],
           ),
+          ThirdPartyCaption(accountCode: creditCtrl.text),
           if (mixed && amt > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(
@@ -901,8 +906,17 @@ class _ProfitTabState extends State<ProfitTab> {
                 ),
           () {
             final name = app.chartAccountName(rows[i].account);
-            return name.isNotEmpty ? name : rows[i].account;
+            final account = name.isNotEmpty ? name : rows[i].account;
+            if (rows[i].balancing && rows[i].thirdPartyName.isNotEmpty) {
+              return account.isNotEmpty ? account : rows[i].thirdPartyName;
+            }
+            return account;
           }(),
+          rows[i].balancing
+              ? (rows[i].thirdPartyName.isNotEmpty
+                  ? rows[i].thirdPartyName
+                  : app.thirdPartyLabelFor(rows[i].account))
+              : app.thirdPartyLabelFor(rows[i].account),
           _profitAmountCell(rows[i].debit, rows[i]),
           _profitAmountCell(rows[i].credit, rows[i]),
           app.resolvedLabel(app.resolvedProfit, rows[i].account),
@@ -988,9 +1002,11 @@ class _ProfitTabState extends State<ProfitTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. التصريف من أسعار صرف الحوالات في وكيد.',
+              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً والطرف الثالث من وكيد.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            const SizedBox(height: 8),
+            const DefaultAccountsCard(title: 'حسابات افتراضية — سند ربحي فردي'),
             const SizedBox(height: 8),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -1055,7 +1071,7 @@ class _ProfitTabState extends State<ProfitTab> {
           ],
           const SizedBox(height: 8),
           PreviewTable(
-            columns: const ['سند', '#', 'البيان', 'حساب', 'مدين', 'دائن', 'محلول'],
+            columns: const ['سند', '#', 'البيان', 'حساب', 'طرف ثالث', 'مدين', 'دائن', 'محلول'],
             rows: tableRows,
           ),
         ],
@@ -1275,6 +1291,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 ),
               ),
             ),
+          ThirdPartyCaption(accountCode: creditCtrl.text),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1311,6 +1328,7 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                 ),
               ),
             ),
+          ThirdPartyCaption(accountCode: debitCtrl.text),
           if (c > 0 || d > 0) ...[
             const SizedBox(height: 8),
             ProfitFxBar(

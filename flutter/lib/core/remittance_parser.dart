@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'json_util.dart';
+
 // Literal Dart port of `parser.js` (wakeed / wakeed2).
 // Template: الاسم | المبلغ | الدائن
 // defaultDebit from UI, defaultCredit = 9830.
@@ -40,6 +42,9 @@ class JournalRow {
     this.currencyCode = '',
     this.currencySymbol = '',
     this.rate = '',
+    this.accountIdOverride = '',
+    this.correspondingIdOverride = '',
+    this.thirdPartyName = '',
   });
 
   String account;
@@ -53,6 +58,9 @@ class JournalRow {
   String currencyCode;
   String currencySymbol;
   String rate;
+  String accountIdOverride;
+  String correspondingIdOverride;
+  String thirdPartyName;
 
   JournalRow copy() => JournalRow(
         account: account,
@@ -66,6 +74,9 @@ class JournalRow {
         currencyCode: currencyCode,
         currencySymbol: currencySymbol,
         rate: rate,
+        accountIdOverride: accountIdOverride,
+        correspondingIdOverride: correspondingIdOverride,
+        thirdPartyName: thirdPartyName,
       );
 
   Map<String, dynamic> toMap() => {
@@ -80,6 +91,9 @@ class JournalRow {
         'currencyCode': currencyCode,
         'currencySymbol': currencySymbol,
         'rate': rate,
+        'accountIdOverride': accountIdOverride,
+        'correspondingIdOverride': correspondingIdOverride,
+        'thirdPartyName': thirdPartyName,
       };
 }
 
@@ -724,6 +738,48 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
     }
   }
   return rows;
+}
+
+/// Directs the profit/كسر line to the third party assigned on the account
+/// owner in Wakeed, instead of leaving it on the debit/credit pair.
+List<JournalRow> applyProfitThirdParty(
+  List<JournalRow> rows, {
+  required AccountThirdParty Function(String accountCode) thirdPartyOf,
+  String Function(String accountCode)? ownerIdOf,
+}) {
+  if (rows.isEmpty) return rows;
+  final groups = groupRowsByKey(rows);
+  final out = <JournalRow>[];
+  for (final group in groups) {
+    JournalRow? owner;
+    for (final row in group.rows) {
+      if (!row.balancing && row.debit.isNotEmpty) {
+        owner = row;
+        break;
+      }
+    }
+    if (owner == null) {
+      for (final row in group.rows) {
+        if (!row.balancing) {
+          owner = row;
+          break;
+        }
+      }
+    }
+    final tp = owner == null ? const AccountThirdParty() : thirdPartyOf(owner.account);
+    final ownerId = owner == null ? '' : (ownerIdOf?.call(owner.account) ?? '');
+    for (final row in group.rows) {
+      final copy = row.copy();
+      if (row.balancing && !tp.isEmpty) {
+        if (tp.code.isNotEmpty) copy.account = tp.code;
+        if (tp.id.isNotEmpty) copy.accountIdOverride = tp.id;
+        if (ownerId.isNotEmpty) copy.correspondingIdOverride = ownerId;
+        copy.thirdPartyName = tp.label;
+      }
+      out.add(copy);
+    }
+  }
+  return out;
 }
 
 List<CustomerGroup> groupRowsByKey(List<JournalRow>? rows) {

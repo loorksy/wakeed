@@ -66,4 +66,46 @@ void main() {
       expect(pickCurrencyRate({'rate': 0.001724, 'lastRate': 0, 'equivalent': 580}), closeTo(0.001724, 0.0000001));
     });
   });
+
+  group('pickAccountThirdParty', () {
+    test('reads nested ThirdParty assigned on the account owner', () {
+      final party = pickAccountThirdParty({
+        'Id': 'acc-555',
+        'AccountCode': '555',
+        'AccountName': 'صندوق',
+        'ThirdParty': {
+          'Id': 'tp-1',
+          'AccountCode': '4001',
+          'AccountName': 'أرباح الحوالات',
+        },
+      });
+      expect(party.id, 'tp-1');
+      expect(party.code, '4001');
+      expect(party.name, 'أرباح الحوالات');
+      expect(party.label, contains('4001'));
+    });
+
+    test('reads thirdPartyId on the Wakeed account card', () {
+      final party = pickAccountThirdParty({
+        'id': 'acc-555',
+        'accountCode': '555',
+        'thirdPartyId': 'tp-9',
+        'thirdPartyCode': '4110',
+        'thirdPartyName': 'عمولة',
+      });
+      expect(party.id, 'tp-9');
+      expect(party.code, '4110');
+      expect(party.name, 'عمولة');
+    });
+
+    test('ignores a third party that is the account itself', () {
+      final party = pickAccountThirdParty({
+        'Id': 'acc-555',
+        'AccountCode': '555',
+        'ThirdPartyId': 'acc-555',
+        'ThirdPartyCode': '555',
+      });
+      expect(party.isEmpty, true);
+    });
+  });
 }

@@ -34,7 +34,12 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
       'debit' || 'chargeDebit' || 'profitDebit' => true,
       _ => false,
     };
-    final title = isDebit ? 'دليل الحسابات — المدين' : 'دليل الحسابات — الدائن';
+    final title = switch (app.accountPickTarget.type) {
+      'debit' => 'دليل الحسابات — المدين الافتراضي',
+      'defaultCredit' => 'دليل الحسابات — الدائن الافتراضي',
+      'chargeDebit' || 'profitDebit' => 'دليل الحسابات — المدين',
+      _ => 'دليل الحسابات — الدائن',
+    };
     final tone = isDebit ? WakeedColors.err : WakeedColors.green;
     final list = app.filteredAccounts(query);
     final shown = list.take(120).toList();
@@ -85,7 +90,8 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                           final acc = shown[i];
                           final code = pickAccountCode(acc);
                           final name = accountNameOf(acc);
-                          final active = code == app.debitAccount && app.accountPickTarget.type == 'debit';
+                          final active = (code == app.debitAccount && app.accountPickTarget.type == 'debit') ||
+                              (code == app.creditAccount && app.accountPickTarget.type == 'defaultCredit');
                           return ListTile(
                             selected: active,
                             title: Text(code, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -94,6 +100,8 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                                 name,
                                 if (app.currencyQuoteForAccount(code).badge.isNotEmpty)
                                   app.currencyQuoteForAccount(code).badge,
+                                if (app.thirdPartyLabelFor(code).isNotEmpty)
+                                  'طرف ثالث: ${app.thirdPartyLabelFor(code)}',
                               ].where((s) => s.toString().trim().isNotEmpty).join(' · '),
                             ),
                             onTap: () => _pick(app, code),
@@ -126,6 +134,8 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
           code: code,
         );
       }
+    } else if (target.type == 'defaultCredit') {
+      app.selectCreditAccount(code);
     } else {
       app.selectDebitAccount(code);
     }
