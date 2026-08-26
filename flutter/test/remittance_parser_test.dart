@@ -198,6 +198,28 @@ void main() {
       expect(applied[1].account, '9830');
     });
 
+    test('does not treat the creditor account as the profit third party', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
+        ],
+      );
+      final applied = applyProfitThirdParty(
+        rows,
+        thirdPartyOf: (code) {
+          if (code == '9830') {
+            return const AccountThirdParty(id: 'acc-9830', code: '9830', name: 'أحمد');
+          }
+          return const AccountThirdParty();
+        },
+      );
+      expect(applied[2].balancing, true);
+      expect(applied[2].account, '555');
+      expect(applied[2].accountIdOverride, '');
+      expect(applied[2].correspondingIdOverride, '');
+      expect(applied[2].thirdPartyName, '');
+    });
+
     test('keeps profit on the debit account when Wakeed has no third party', () {
       final rows = buildProfitJournalRows(
         [

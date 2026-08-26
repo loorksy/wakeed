@@ -611,6 +611,7 @@ class AppController extends ChangeNotifier {
           : [];
       sampleDetail = (details is List && details.isNotEmpty) ? details.first : null;
       accountCache.clear();
+      _hydratedAccountCodes.clear();
       accounts = flattenAccounts(asList(accountsRaw));
       if (accounts.isEmpty) {
         await loadChartAccounts();
@@ -811,40 +812,60 @@ class AppController extends ChangeNotifier {
 
   String profitBeneficiaryLabel({String credit = '', String debit = ''}) {
     for (final code in [credit, debit]) {
-      final label = thirdPartyLabelFor(code);
-      if (label.isNotEmpty) return label;
+      final acc = _accountByCode(normalizeAccountKey(code));
+      final party = pickAccountThirdParty(acc);
+      if (party.isEmpty ||
+          party.matchesAccount(acc) ||
+          party.matchesAccountCode(credit) ||
+          party.matchesAccountCode(debit)) {
+        continue;
+      }
+      var label = party.label;
+      if (label.isEmpty) label = thirdPartyLabelFor(code);
+      if (label.isEmpty) continue;
+      if (acc != null &&
+          (label == accountLabel(acc) || label == accountNameOf(acc) || label == pickAccountCode(acc))) {
+        continue;
+      }
+      return label;
     }
     return '';
   }
 
-  Future<dynamic> hydrateAccount(String code) async {
+  Future<dynamic> hydrateAccount(String code, {bool force = false}) async {
     final key = normalizeAccountKey(code);
     if (key.isEmpty) return null;
     final cached = _accountByCode(key);
-    if (_hydratedAccountCodes.contains(key) && cached != null) return cached;
+    if (!force && _hydratedAccountCodes.contains(key) && cached != null) return cached;
     final id = pickId(cached);
     dynamic full;
     final attempts = <String>[
       if (id.isNotEmpty) '/api/NormalAccount/$id',
       if (id.isNotEmpty) '/api/NormalAccount/GetById?id=${Uri.encodeComponent(id)}',
+      if (id.isNotEmpty) '/api/NormalAccount/GetById?Id=${Uri.encodeComponent(id)}',
+      if (id.isNotEmpty) '/api/NormalAccount/Get?id=${Uri.encodeComponent(id)}',
       '/api/NormalAccount/GetByCode?code=${Uri.encodeComponent(key)}',
+      '/api/NormalAccount/GetByCode?Code=${Uri.encodeComponent(key)}',
     ];
     for (final path in attempts) {
       try {
-        final data = await _api('GET', path);
+        final data = unwrapEntity(await _api('GET', path));
         if (data is Map && (pickId(data).isNotEmpty || pickAccountCode(data).isNotEmpty)) {
           full = data;
           break;
         }
       } catch (_) {}
     }
+    if (full is! Map) {
+      if (!force) _hydratedAccountCodes.add(key);
+      return cached;
+    }
     _hydratedAccountCodes.add(key);
-    if (full is! Map) return cached;
     var map = Map<String, dynamic>.from(full);
     var party = pickAccountThirdParty(map);
     if (party.id.isNotEmpty && (party.code.isEmpty || party.name.isEmpty)) {
       try {
-        final nested = await _api('GET', '/api/NormalAccount/${party.id}');
+        final nested = unwrapEntity(await _api('GET', '/api/NormalAccount/${party.id}'));
         if (nested is Map && pickId(nested).isNotEmpty) {
           map = {
             ...map,
@@ -872,7 +893,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> hydrateProfitAccounts(Iterable<String> codes) async {
     final unique = codes.map(normalizeAccountKey).where((c) => c.isNotEmpty).toSet();
-    await Future.wait(unique.map(hydrateAccount));
+    await Future.wait(unique.map((c) => hydrateAccount(c, force: true)));
     _emit();
   }
 
@@ -1883,12 +1904,19 @@ class AppController extends ChangeNotifier {
     if (extras['costCenterId'] != null && extras['costCenterId'].toString().isNotEmpty) {
       detail['costCenterID'] = extras['costCenterId'];
     }
-    var party = pickAccountThirdParty(account);
     final corresponding = extras['correspondingId']?.toString() ?? '';
+    final isProfit = extras['section'] == 'profit';
+    var party = isProfit ? const AccountThirdParty() : pickAccountThirdParty(account);
     if (corresponding.isNotEmpty) {
       detail['correspondingAccountID'] = corresponding;
       detail['oppositeAccountID'] = corresponding;
-      if (party.id.isEmpty) party = AccountThirdParty(id: corresponding, name: row.thirdPartyName);
+      party = AccountThirdParty(
+        id: corresponding,
+        code: party.code,
+        name: row.thirdPartyName.isNotEmpty ? row.thirdPartyName : party.name,
+      );
+    } else if (isProfit) {
+      party = const AccountThirdParty();
     }
     applyAccountThirdPartyFields(detail, party);
     return detail;
@@ -1907,19 +1935,30 @@ class AppController extends ChangeNotifier {
 
   String _profitWakeedThirdPartyId(JournalRow row, List<JournalRow> rows, Map<String, dynamic> resolved) {
     JournalRow? credit;
+    JournalRow? debit;
     for (final r in rows) {
-      if (r.groupKey == row.groupKey && !r.balancing && r.credit.isNotEmpty) {
-        credit = r;
-        break;
-      }
+      if (r.groupKey != row.groupKey || r.balancing) continue;
+      if (credit == null && r.credit.isNotEmpty) credit = r;
+      if (debit == null && r.debit.isNotEmpty) debit = r;
     }
+    final skipIds = <String>{
+      pickId(resolved[normalizeAccountKey(credit?.account ?? '')] ?? _accountByCode(credit?.account ?? '')),
+      pickId(resolved[normalizeAccountKey(debit?.account ?? '')] ?? _accountByCode(debit?.account ?? '')),
+    }..removeWhere((id) => id.isEmpty);
     for (final code in [
       if (credit != null) credit.account,
+      if (debit != null) debit.account,
       row.account,
     ]) {
       final acc = resolved[normalizeAccountKey(code)] ?? _accountByCode(code);
       final tp = pickAccountThirdParty(acc);
-      if (tp.id.isNotEmpty) return tp.id;
+      if (tp.id.isEmpty || skipIds.contains(tp.id)) continue;
+      if (tp.matchesAccount(acc) ||
+          tp.matchesAccountCode(credit?.account ?? '') ||
+          tp.matchesAccountCode(debit?.account ?? '')) {
+        continue;
+      }
+      return tp.id;
     }
     return '';
   }

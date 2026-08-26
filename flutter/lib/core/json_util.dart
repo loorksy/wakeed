@@ -245,38 +245,65 @@ class AccountThirdParty {
     if (code.isNotEmpty) return code;
     return '';
   }
+
+  bool matchesAccount(dynamic acc) {
+    if (acc is! Map) return false;
+    final accId = pickId(acc);
+    final accCode = pickAccountCode(acc);
+    final accName = accountNameOf(acc);
+    if (id.isNotEmpty && accId.isNotEmpty && id == accId) return true;
+    if (code.isNotEmpty && accCode.isNotEmpty && normalizeAccountKey(code) == normalizeAccountKey(accCode)) {
+      return true;
+    }
+    if (name.isNotEmpty && accName.isNotEmpty && name == accName) return true;
+    return false;
+  }
+
+  bool matchesAccountCode(String accountCode) {
+    final key = normalizeAccountKey(accountCode);
+    return key.isNotEmpty && code.isNotEmpty && normalizeAccountKey(code) == key;
+  }
+}
+
+String _normFieldKey(String key) => key.toLowerCase().replaceAll(RegExp(r'[_-]'), '');
+
+bool _isExplicitThirdPartyKey(String key) {
+  final k = _normFieldKey(key);
+  return k.contains('thirdparty') || k.contains('correspondingaccount');
+}
+
+bool _isOwnerNestKey(String key) {
+  final k = _normFieldKey(key);
+  return k == 'party' ||
+      k == 'partyaccount' ||
+      k == 'agent' ||
+      k == 'agentaccount' ||
+      k == 'accountowner' ||
+      k == 'owneraccount' ||
+      k == 'relatedaccount' ||
+      k == 'customer' ||
+      k == 'owner';
 }
 
 dynamic _nestedThirdParty(dynamic acc) {
   if (acc is! Map) return null;
-  for (final key in const [
-    'ThirdParty',
-    'thirdParty',
-    'ThirdPartyAccount',
-    'thirdPartyAccount',
-    'RelatedAccount',
-    'relatedAccount',
-    'AccountOwner',
-    'accountOwner',
-    'OwnerAccount',
-    'ownerAccount',
-    'DefaultThirdParty',
-    'defaultThirdParty',
-    'Party',
-    'party',
-    'PartyAccount',
-    'partyAccount',
-    'Agent',
-    'agent',
-    'AgentAccount',
-    'agentAccount',
-  ]) {
-    final v = acc[key];
+  for (final entry in acc.entries) {
+    if (!_isExplicitThirdPartyKey(entry.key.toString())) continue;
+    final v = entry.value;
     if (v is Map && (pickId(v).isNotEmpty || pickAccountCode(v).isNotEmpty || accountNameOf(v).isNotEmpty)) {
       return v;
     }
   }
   return null;
+}
+
+Iterable<Map<dynamic, dynamic>> _ownerNests(dynamic acc) sync* {
+  if (acc is! Map) return;
+  for (final entry in acc.entries) {
+    if (!_isOwnerNestKey(entry.key.toString())) continue;
+    final v = entry.value;
+    if (v is Map) yield v;
+  }
 }
 
 String _firstNonEmpty(dynamic acc, List<String> keys) {
@@ -290,8 +317,23 @@ String _firstNonEmpty(dynamic acc, List<String> keys) {
   return '';
 }
 
-/// Third party assigned to an account card in Wakeed (صاحب الحساب).
-AccountThirdParty pickAccountThirdParty(dynamic acc) {
+String _thirdPartyScalar(dynamic acc, {required bool id, required bool code, required bool name}) {
+  if (acc is! Map) return '';
+  for (final entry in acc.entries) {
+    if (!_isExplicitThirdPartyKey(entry.key.toString())) continue;
+    final v = entry.value;
+    if (v is Map || v is List) continue;
+    final text = (v ?? '').toString().trim();
+    if (text.isEmpty || text == '0') continue;
+    final k = _normFieldKey(entry.key.toString());
+    if (id && (k.endsWith('id') || k.contains('accountid'))) return text;
+    if (code && k.endsWith('code')) return text;
+    if (name && (k.endsWith('name') || k.endsWith('displayname'))) return text;
+  }
+  return '';
+}
+
+AccountThirdParty _pickExplicitThirdParty(dynamic acc) {
   if (acc is! Map) return const AccountThirdParty();
   final nested = _nestedThirdParty(acc);
   var id = '';
@@ -303,6 +345,9 @@ AccountThirdParty pickAccountThirdParty(dynamic acc) {
     name = accountNameOf(nested);
   }
   if (id.isEmpty) {
+    id = _thirdPartyScalar(acc, id: true, code: false, name: false);
+  }
+  if (id.isEmpty) {
     id = _firstNonEmpty(acc, const [
       'ThirdPartyId',
       'thirdPartyId',
@@ -311,26 +356,18 @@ AccountThirdParty pickAccountThirdParty(dynamic acc) {
       'ThirdPartyAccountId',
       'thirdPartyAccountId',
       'ThirdPartyAccountID',
-      'RelatedAccountId',
-      'relatedAccountId',
-      'RelatedAccountID',
-      'AccountOwnerId',
-      'accountOwnerId',
-      'AccountOwnerID',
-      'OwnerAccountId',
-      'ownerAccountId',
+      'CorrespondingAccountId',
+      'correspondingAccountId',
+      'correspondingAccountID',
+      'CorrespondingAccountID',
       'DefaultThirdPartyId',
       'defaultThirdPartyId',
-      'PartyId',
-      'partyId',
-      'PartyID',
-      'PartyAccountId',
-      'partyAccountId',
-      'AgentId',
-      'agentId',
-      'AgentAccountId',
-      'agentAccountId',
+      'DefaultCorrespondingAccountId',
+      'defaultCorrespondingAccountId',
     ]);
+  }
+  if (code.isEmpty) {
+    code = _thirdPartyScalar(acc, id: false, code: true, name: false);
   }
   if (code.isEmpty) {
     code = _firstNonEmpty(acc, const [
@@ -338,12 +375,12 @@ AccountThirdParty pickAccountThirdParty(dynamic acc) {
       'thirdPartyCode',
       'ThirdPartyAccountCode',
       'thirdPartyAccountCode',
-      'RelatedAccountCode',
-      'relatedAccountCode',
-      'AccountOwnerCode',
-      'accountOwnerCode',
-      'OwnerAccountCode',
+      'CorrespondingAccountCode',
+      'correspondingAccountCode',
     ]);
+  }
+  if (name.isEmpty) {
+    name = _thirdPartyScalar(acc, id: false, code: false, name: true);
   }
   if (name.isEmpty) {
     name = _firstNonEmpty(acc, const [
@@ -351,18 +388,81 @@ AccountThirdParty pickAccountThirdParty(dynamic acc) {
       'thirdPartyName',
       'ThirdPartyAccountName',
       'thirdPartyAccountName',
-      'RelatedAccountName',
-      'relatedAccountName',
-      'AccountOwnerName',
-      'accountOwnerName',
-      'OwnerAccountName',
+      'CorrespondingAccountName',
+      'correspondingAccountName',
     ]);
   }
+  return AccountThirdParty(id: id, code: code, name: name);
+}
+
+AccountThirdParty _rejectSelfParty(dynamic acc, AccountThirdParty party) {
+  if (party.isEmpty && party.name.isEmpty) return const AccountThirdParty();
+  var id = party.id;
+  var code = party.code;
+  var name = party.name;
   final selfId = pickId(acc);
   final selfCode = pickAccountCode(acc);
+  final selfName = accountNameOf(acc);
   if (selfId.isNotEmpty && id == selfId) id = '';
-  if (selfCode.isNotEmpty && code == selfCode) code = '';
+  if (selfCode.isNotEmpty && normalizeAccountKey(code) == normalizeAccountKey(selfCode)) code = '';
+  if (selfName.isNotEmpty && name == selfName) name = '';
+  if (id.isEmpty && code.isEmpty) return const AccountThirdParty();
   return AccountThirdParty(id: id, code: code, name: name);
+}
+
+/// Third party assigned on a Wakeed account card — never the account's own Party/owner (الدائن).
+AccountThirdParty pickAccountThirdParty(dynamic acc) {
+  if (acc is! Map) return const AccountThirdParty();
+  var party = _rejectSelfParty(acc, _pickExplicitThirdParty(acc));
+  if (party.isEmpty) {
+    for (final owner in _ownerNests(acc)) {
+      final nested = _rejectSelfParty(owner, _pickExplicitThirdParty(owner));
+      final distinct = _rejectSelfParty(acc, nested);
+      if (!distinct.isEmpty && !distinct.matchesAccount(acc) && !distinct.matchesAccount(owner)) {
+        party = distinct;
+        break;
+      }
+    }
+  }
+  if (party.matchesAccount(acc)) return const AccountThirdParty();
+  return party;
+}
+
+/// Unwrap Wakeed `{ data: { ... } }` / list-of-one payloads into the account object.
+dynamic unwrapEntity(dynamic data) {
+  var current = data;
+  for (var i = 0; i < 5; i++) {
+    if (current is List && current.isNotEmpty) {
+      current = current.first;
+      continue;
+    }
+    if (current is! Map) return current;
+    if (pickId(current).isNotEmpty || pickAccountCode(current).isNotEmpty) return current;
+    dynamic next;
+    for (final key in const [
+      'data',
+      'Data',
+      'result',
+      'Result',
+      'value',
+      'Value',
+      'item',
+      'Item',
+      'account',
+      'Account',
+      'normalAccount',
+      'NormalAccount',
+    ]) {
+      final v = current[key];
+      if (v != null) {
+        next = v;
+        break;
+      }
+    }
+    if (next == null) return current;
+    current = next;
+  }
+  return current;
 }
 
 void applyAccountThirdPartyFields(Map<String, dynamic> detail, AccountThirdParty party) {

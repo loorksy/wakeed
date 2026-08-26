@@ -762,10 +762,13 @@ List<JournalRow> applyProfitThirdParty(
     for (final row in [credit, debit]) {
       if (row == null) continue;
       final found = thirdPartyOf(row.account);
-      if (!found.isEmpty) {
-        tp = found;
-        break;
+      if (found.isEmpty) continue;
+      if (found.matchesAccountCode(credit?.account ?? '') ||
+          found.matchesAccountCode(debit?.account ?? '')) {
+        continue;
       }
+      tp = found;
+      break;
     }
     for (final row in group.rows) {
       final copy = row.copy();
