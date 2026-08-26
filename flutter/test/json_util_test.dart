@@ -155,6 +155,127 @@ void main() {
     });
   });
 
+  group('pickAssignedProfitAccount', () {
+    test('reads the agent box assigned on the account card', () {
+      final party = pickAssignedProfitAccount({
+        'Id': 'acc-9830',
+        'AccountCode': '9830',
+        'AccountName': 'السلطان',
+        'agent': {
+          'Id': 'box-1',
+          'AccountCode': '325',
+          'AccountName': 'العالمية',
+        },
+      });
+      expect(party.id, 'box-1');
+      expect(party.code, '325');
+      expect(party.name, 'العالمية');
+    });
+
+    test('reads lowercase Wakeed agent fields', () {
+      final party = pickAssignedProfitAccount({
+        'id': 'acc-9830',
+        'accountCode': '9830',
+        'accountName': 'السلطان',
+        'agent': {
+          'id': 'box-1',
+          'accountCode': '325',
+          'accountName': 'العالمية',
+        },
+      });
+      expect(party.id, 'box-1');
+      expect(party.code, '325');
+      expect(party.name, 'العالمية');
+    });
+
+    test('prefers the assigned agent box over a generic third party', () {
+      final party = pickAssignedProfitAccount({
+        'Id': 'acc-9830',
+        'AccountCode': '9830',
+        'AccountName': 'السلطان',
+        'ThirdParty': {
+          'Id': 'tp-wrong',
+          'AccountCode': '422',
+          'AccountName': 'عمولة الحوالات',
+        },
+        'agent': {
+          'Id': 'box-1',
+          'AccountCode': '325',
+          'AccountName': 'العالمية',
+        },
+      });
+      expect(party.code, '325');
+      expect(party.name, 'العالمية');
+    });
+
+    test('uses the third-party box assigned on that account even if the name is not revenue-like', () {
+      final party = pickAssignedProfitAccount({
+        'Id': 'acc-9830',
+        'AccountCode': '9830',
+        'AccountName': 'السلطان',
+        'ThirdParty': {
+          'Id': 'box-1',
+          'AccountCode': '325',
+          'AccountName': 'العالمية',
+        },
+      });
+      expect(party.id, 'box-1');
+      expect(party.code, '325');
+      expect(party.name, 'العالمية');
+    });
+
+    test('does not use a global revenue name when this account has its own box', () {
+      final party = pickAssignedProfitAccount({
+        'Id': 'acc-111',
+        'AccountCode': '111',
+        'AccountName': 'شامنا غولد',
+        'ThirdParty': {
+          'Id': 'box-own',
+          'AccountCode': '101027',
+          'AccountName': 'صندوق شامنا',
+        },
+      });
+      expect(party.code, '101027');
+      expect(party.name, 'صندوق شامنا');
+    });
+
+    test('ignores Party because that is the account owner', () {
+      final party = pickAssignedProfitAccount({
+        'Id': 'acc-9830',
+        'AccountCode': '9830',
+        'AccountName': 'السلطان',
+        'Party': {'Id': 'acc-9830', 'AccountCode': '9830', 'AccountName': 'السلطان'},
+      });
+      expect(party.isEmpty, true);
+    });
+  });
+
+  group('mergeAccountMaps', () {
+    test('keeps the assigned third-party box when the full card omits it', () {
+      final merged = mergeAccountMaps(
+        {
+          'Id': 'acc-9830',
+          'AccountCode': '9830',
+          'AccountName': 'السلطان',
+          'ThirdParty': {
+            'Id': 'box-1',
+            'AccountCode': '325',
+            'AccountName': 'العالمية',
+          },
+        },
+        {
+          'Id': 'acc-9830',
+          'AccountCode': '9830',
+          'AccountName': 'السلطان',
+          'agent': null,
+        },
+      );
+      final party = pickAssignedProfitAccount(merged);
+      expect(party.code, '325');
+      expect(party.name, 'العالمية');
+    });
+  });
+
   group('pickRevenueProfitAccount', () {
     test('picks أرباح الحوالات under فرع الإيرادات', () {
       final tree = [

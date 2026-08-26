@@ -912,11 +912,7 @@ class _ProfitTabState extends State<ProfitTab> {
             }
             return account;
           }(),
-          rows[i].balancing
-              ? (rows[i].thirdPartyName.isNotEmpty
-                  ? rows[i].thirdPartyName
-                  : app.chartRevenueProfit.label)
-              : '',
+          rows[i].balancing ? app.profitBoxLabelForRow(rows, rows[i]) : '',
           _profitAmountCell(rows[i].debit, rows[i]),
           _profitAmountCell(rows[i].credit, rows[i]),
           app.resolvedLabel(app.resolvedProfit, rows[i].account),
@@ -929,9 +925,7 @@ class _ProfitTabState extends State<ProfitTab> {
           const Text('سند ربحي', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(
-            app.chartRevenueProfit.label.isNotEmpty
-                ? 'حساب الربح من فرع الإيرادات: ${app.chartRevenueProfit.label}'
-                : 'يُجلب حساب الربح تلقائياً من فرع الإيرادات في دليل الحسابات.',
+            'حساب الربح يُجلب من الصندوق أو الإيراد المعيَّن على بطاقة كل حساب في وكيد، وليس من صندوق عام.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -1009,13 +1003,13 @@ class _ProfitTabState extends State<ProfitTab> {
             ),
             const SizedBox(height: 4),
             Text(
-              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً، وحساب الربح يُجلب من فرع الإيرادات.',
+              'أدخل الدائن ومبلغه والمدين ومبلغه في كل بطاقة. الحسابات الافتراضية تُعبأ تلقائياً، وحساب الربح من الصندوق المعيَّن على كل حساب.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
             const DefaultAccountsCard(
               title: 'حسابات افتراضية — سند ربحي فردي',
-              subtitle: 'يُعبَّأ المدين والدائن تلقائياً. حساب الربح يُجلب من فرع الإيرادات في دليل الحسابات.',
+              subtitle: 'يُعبَّأ المدين والدائن تلقائياً. حساب الربح من الصندوق/الإيراد المعيَّن على كل حساب.',
             ),
             const SizedBox(height: 8),
             LayoutBuilder(
@@ -1299,6 +1293,14 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
                   '${formatProfitAmount(c)} ${creditQ.badge} = ${formatProfitAmount(creditBase)} $baseSymbol',
                   style: const TextStyle(fontSize: 11, color: WakeedColors.green),
                 ),
+              ),
+            ),
+          if (who.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'صندوق الربح المعيَّن: $who',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: WakeedColors.accent),
               ),
             ),
           const SizedBox(height: 6),

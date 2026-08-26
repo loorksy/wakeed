@@ -500,6 +500,124 @@ List<dynamic> collectRevenueLeaves(dynamic nodes, {bool underRevenue = false}) {
   return out;
 }
 
+bool _isAssignedProfitFieldKey(String key) {
+  final k = _normFieldKey(key);
+  if (k.contains('thirdparty') || k.contains('correspondingaccount')) return false;
+  if (k == 'party' || k == 'partyaccount' || k == 'owner' || k == 'customer') return false;
+  return k.contains('revenue') ||
+      k.contains('incomeaccount') ||
+      k.contains('profit') ||
+      k.contains('commission') ||
+      k.contains('box') ||
+      k.contains('fund') ||
+      k.contains('safe') ||
+      k.contains('cashbox') ||
+      k.contains('sandook') ||
+      k.contains('sunduq') ||
+      k == 'agent' ||
+      k == 'agents' ||
+      k == 'agentid' ||
+      k == 'agentcode' ||
+      k == 'agentaccount' ||
+      k == 'agentaccountid' ||
+      k == 'agentaccountcode';
+}
+
+AccountThirdParty _partyFromValue(dynamic value) {
+  if (value == null) return const AccountThirdParty();
+  if (value is List) {
+    for (final item in value) {
+      final party = _partyFromValue(item);
+      if (!party.isEmpty) return party;
+    }
+    return const AccountThirdParty();
+  }
+  if (value is Map) {
+    final self = AccountThirdParty(
+      id: pickId(value),
+      code: pickAccountCode(value),
+      name: accountNameOf(value),
+    );
+    if (self.code.isNotEmpty || self.name.isNotEmpty) return self;
+    final nested = _partyFromValue(
+      value['agent'] ??
+          value['Agent'] ??
+          value['account'] ??
+          value['Account'] ??
+          value['normalAccount'] ??
+          value['NormalAccount'],
+    );
+    if (!nested.isEmpty) return nested;
+    return self;
+  }
+  final text = value.toString().trim();
+  if (text.isEmpty || text == '0') return const AccountThirdParty();
+  if (RegExp(r'^[0-9]+$').hasMatch(text) && text.length >= 2 && text.length <= 12) {
+    return AccountThirdParty(code: text);
+  }
+  if (RegExp(r'^[0-9a-fA-F-]{8,}$').hasMatch(text)) {
+    return AccountThirdParty(id: text);
+  }
+  return const AccountThirdParty();
+}
+
+List<AccountThirdParty> _partiesFromKeys(dynamic acc, bool Function(String key) match) {
+  if (acc is! Map) return const [];
+  final out = <AccountThirdParty>[];
+  for (final entry in acc.entries) {
+    if (!match(entry.key.toString())) continue;
+    final party = _partyFromValue(entry.value);
+    if (!party.isEmpty) out.add(party);
+  }
+  return out;
+}
+
+/// Profit box / revenue account assigned on a Wakeed account card when it was created.
+/// Prefers agent/box/revenue fields, then that card's own ThirdParty — never a global chart pick.
+AccountThirdParty pickAssignedProfitAccount(dynamic acc) {
+  if (acc is! Map) return const AccountThirdParty();
+  final assigned = _partiesFromKeys(acc, _isAssignedProfitFieldKey);
+  final fromOwners = <AccountThirdParty>[
+    for (final owner in _ownerNests(acc)) ..._partiesFromKeys(owner, _isAssignedProfitFieldKey),
+  ];
+  var pool = [...assigned, ...fromOwners];
+  if (pool.isEmpty) {
+    pool = [
+      ..._partiesFromKeys(acc, _isExplicitThirdPartyKey),
+      for (final owner in _ownerNests(acc)) ..._partiesFromKeys(owner, _isExplicitThirdPartyKey),
+    ];
+  }
+  for (final party in pool) {
+    final distinct = _rejectSelfParty(acc, party);
+    if (distinct.isEmpty || distinct.matchesAccount(acc)) continue;
+    return distinct;
+  }
+  return const AccountThirdParty();
+}
+
+Map<String, dynamic> asStringKeyedMap(dynamic obj) {
+  if (obj is Map<String, dynamic>) return Map<String, dynamic>.from(obj);
+  if (obj is Map) {
+    return obj.map((key, value) => MapEntry(key.toString(), value));
+  }
+  return <String, dynamic>{};
+}
+
+/// Keeps assignment fields from the chart/list card when GET /NormalAccount/{id} omits them.
+Map<String, dynamic> mergeAccountMaps(Map<String, dynamic> base, Map<String, dynamic> incoming) {
+  final out = Map<String, dynamic>.from(base);
+  incoming.forEach((key, value) {
+    if (value == null) return;
+    final existing = out[key];
+    if (value is Map && existing is Map) {
+      out[key] = mergeAccountMaps(asStringKeyedMap(existing), asStringKeyedMap(value));
+    } else {
+      out[key] = value;
+    }
+  });
+  return out;
+}
+
 /// Leaf account under Wakeed chart branch فرع الإيرادات — never a hardcoded default.
 AccountThirdParty pickRevenueProfitAccount(Iterable<dynamic> accounts, {dynamic tree}) {
   var pool = collectRevenueLeaves(tree);

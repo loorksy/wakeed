@@ -166,7 +166,7 @@ void main() {
       expect(groups[1].name, 'ب');
     });
 
-    test('does not post profit to the creditor; chart revenue account is used', () {
+    test('does not post profit to the creditor; assigned account box is used', () {
       final rows = buildProfitJournalRows(
         [
           ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
@@ -174,20 +174,79 @@ void main() {
       );
       final applied = applyProfitThirdParty(
         rows,
-        profitAccount: const AccountThirdParty(id: 'rev-1', code: '4001', name: 'أرباح الحوالات'),
+        profitAccountOf: (code) {
+          if (code == '9830') {
+            return const AccountThirdParty(id: 'box-1', code: '325', name: 'العالمية');
+          }
+          return const AccountThirdParty();
+        },
       );
       expect(applied.length, 3);
       expect(applied[1].account, '9830');
       expect(applied[1].balancing, false);
-      expect(applied[1].correspondingIdOverride, '');
       final profitLine = applied[2];
       expect(profitLine.balancing, true);
       expect(profitLine.account, isNot('9830'));
-      expect(profitLine.account, '4001');
-      expect(profitLine.accountIdOverride, 'rev-1');
-      expect(profitLine.correspondingIdOverride, '');
-      expect(profitLine.credit, '100');
-      expect(profitLine.thirdPartyName, contains('أرباح'));
+      expect(profitLine.account, '325');
+      expect(profitLine.accountIdOverride, 'box-1');
+      expect(profitLine.thirdPartyName, contains('العالمية'));
+    });
+
+    test('uses the credit account box, not the debit account box', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
+        ],
+      );
+      final applied = applyProfitThirdParty(
+        rows,
+        profitAccountOf: (code) {
+          if (code == '9830') return const AccountThirdParty(id: 'b1', code: '325', name: 'العالمية');
+          if (code == '555') return const AccountThirdParty(id: 'b2', code: '422', name: 'عمولة الحوالات');
+          return const AccountThirdParty();
+        },
+      );
+      expect(applied.last.account, '325');
+      expect(applied.last.thirdPartyName, contains('العالمية'));
+    });
+
+    test('uses a different profit box for each account', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'ا', credit: '9830', creditAmount: '100', debit: '555', debitAmount: '150'),
+          ProfitPasteRow(name: 'ب', credit: '111', creditAmount: '200', debit: '555', debitAmount: '260'),
+        ],
+      );
+      final applied = applyProfitThirdParty(
+        rows,
+        profitAccountOf: (code) {
+          if (code == '9830') return const AccountThirdParty(id: 'b1', code: '325', name: 'العالمية');
+          if (code == '111') return const AccountThirdParty(id: 'b2', code: '422', name: 'عمولة الحوالات');
+          return const AccountThirdParty();
+        },
+      );
+      final groups = groupRowsByKey(applied);
+      expect(groups.length, 2);
+      expect(groups[0].rows.last.account, '325');
+      expect(groups[1].rows.last.account, '422');
+    });
+
+    test('does not use the debit account third-party box', () {
+      final rows = buildProfitJournalRows(
+        [
+          ProfitPasteRow(name: 'احمد', credit: '9830', creditAmount: '400', debit: '555', debitAmount: '500'),
+        ],
+      );
+      final applied = applyProfitThirdParty(
+        rows,
+        profitAccountOf: (code) {
+          if (code == '555') return const AccountThirdParty(id: 'b2', code: '422', name: 'عمولة الحوالات');
+          return const AccountThirdParty();
+        },
+      );
+      expect(applied.last.balancing, true);
+      expect(applied.last.account, '555');
+      expect(applied.last.thirdPartyName, '');
     });
 
     test('does not treat the creditor account as the profit revenue account', () {

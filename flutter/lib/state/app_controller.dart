@@ -850,6 +850,44 @@ class AppController extends ChangeNotifier {
     return pickAccountThirdParty(_accountByCode(normalizeAccountKey(code)));
   }
 
+  AccountThirdParty profitAccountFor(String code) {
+    final acc = _accountByCode(normalizeAccountKey(code));
+    var party = pickAssignedProfitAccount(acc);
+    if (party.isEmpty) return const AccountThirdParty();
+    if (acc != null && party.matchesAccount(acc)) return const AccountThirdParty();
+    if (party.code.isNotEmpty && party.name.isNotEmpty) {
+      if (party.id.isEmpty) {
+        final a = _accountByCode(party.code);
+        if (a != null) {
+          return AccountThirdParty(
+            id: pickId(a),
+            code: pickAccountCode(a),
+            name: accountNameOf(a),
+          );
+        }
+      }
+      return party;
+    }
+    if (party.id.isNotEmpty) {
+      for (final a in accounts) {
+        if (pickId(a) == party.id) {
+          return AccountThirdParty(id: party.id, code: pickAccountCode(a), name: accountNameOf(a));
+        }
+      }
+    }
+    if (party.code.isNotEmpty) {
+      final a = _accountByCode(party.code);
+      if (a != null) {
+        return AccountThirdParty(
+          id: pickId(a).isNotEmpty ? pickId(a) : party.id,
+          code: pickAccountCode(a),
+          name: accountNameOf(a),
+        );
+      }
+    }
+    return party;
+  }
+
   String thirdPartyLabelFor(String code) {
     final party = thirdPartyForAccountCode(code);
     if (party.label.isNotEmpty) return party.label;
@@ -861,9 +899,11 @@ class AppController extends ChangeNotifier {
   }
 
   String profitBeneficiaryLabel({String credit = '', String debit = ''}) {
-    final tp = chartRevenueProfit;
-    if (tp.isEmpty || tp.matchesAccountCode(credit) || tp.matchesAccountCode(debit)) return '';
-    return tp.label;
+    final party = profitAccountFor(credit);
+    if (party.isEmpty || party.matchesAccountCode(credit) || party.matchesAccountCode(debit)) {
+      return '';
+    }
+    return party.label;
   }
 
   Future<dynamic> hydrateAccount(String code, {bool force = false}) async {
@@ -890,21 +930,35 @@ class AppController extends ChangeNotifier {
         }
       } catch (_) {}
     }
-    if (full is! Map) {
+    if (full is! Map && cached is! Map) {
       if (!force) _hydratedAccountCodes.add(key);
       return cached;
     }
     _hydratedAccountCodes.add(key);
-    var map = Map<String, dynamic>.from(full);
-    var party = pickAccountThirdParty(map);
-    if (party.id.isNotEmpty && (party.code.isEmpty || party.name.isEmpty)) {
+    final previous = cached is Map ? asStringKeyedMap(cached) : <String, dynamic>{};
+    var map = full is Map ? mergeAccountMaps(previous, asStringKeyedMap(full)) : previous;
+    var assigned = pickAssignedProfitAccount(map);
+    if (assigned.isEmpty) {
+      final lookupId = pickId(map).isNotEmpty ? pickId(map) : id;
+      if (lookupId.isNotEmpty) {
+        assigned = await _fetchAssignedAgent(lookupId, self: map);
+        if (!assigned.isEmpty) {
+          map = mergeAccountMaps(map, {
+            'agent': {
+              if (assigned.id.isNotEmpty) 'Id': assigned.id,
+              if (assigned.code.isNotEmpty) 'AccountCode': assigned.code,
+              if (assigned.name.isNotEmpty) 'AccountName': assigned.name,
+            },
+          });
+        }
+      }
+    }
+    if (assigned.id.isNotEmpty && (assigned.code.isEmpty || assigned.name.isEmpty)) {
       try {
-        final nested = unwrapEntity(await _api('GET', '/api/NormalAccount/${party.id}'));
-        if (nested is Map && pickId(nested).isNotEmpty) {
-          map = {
-            ...map,
-            'ThirdParty': nested,
-          };
+        final nested = unwrapEntity(await _api('GET', '/api/NormalAccount/${assigned.id}'));
+        if (nested is Map && (pickId(nested).isNotEmpty || pickAccountCode(nested).isNotEmpty)) {
+          map = mergeAccountMaps(map, {'agent': asStringKeyedMap(nested)});
+          assigned = pickAssignedProfitAccount(map);
           final nestedCode = pickAccountCode(nested);
           if (nestedCode.isNotEmpty) {
             accountCache[nestedCode] = nested;
@@ -925,9 +979,68 @@ class AppController extends ChangeNotifier {
     return map;
   }
 
-  Future<void> hydrateProfitAccounts(Iterable<String> codes) async {
+  Future<AccountThirdParty> _fetchAssignedAgent(String accountId, {dynamic self}) async {
+    final paths = [
+      '/api/NormalAccount/GetAgents?id=${Uri.encodeComponent(accountId)}',
+      '/api/NormalAccount/GetAgents?Id=${Uri.encodeComponent(accountId)}',
+      '/api/NormalAccount/GetAgent?id=${Uri.encodeComponent(accountId)}',
+      '/api/Agent?normalAccountId=${Uri.encodeComponent(accountId)}',
+      '/api/Agent?NormalAccountId=${Uri.encodeComponent(accountId)}',
+      '/api/Agent?accountId=${Uri.encodeComponent(accountId)}',
+    ];
+    for (final path in paths) {
+      try {
+        final data = await _api('GET', path);
+        final items = <dynamic>[
+          ...asList(data),
+          unwrapEntity(data),
+        ];
+        for (final raw in items) {
+          if (raw is! Map) continue;
+          var party = pickAssignedProfitAccount(raw);
+          if (party.isEmpty) party = _partyFromAgentRecord(raw);
+          if (party.isEmpty || party.id == accountId) continue;
+          if (self is Map && (party.matchesAccount(self) || party.id == pickId(self))) continue;
+          if (!chartRevenueProfit.isEmpty &&
+              (party.id == chartRevenueProfit.id ||
+                  (chartRevenueProfit.code.isNotEmpty && party.matchesAccountCode(chartRevenueProfit.code)))) {
+            continue;
+          }
+          return party;
+        }
+      } catch (_) {}
+    }
+    return const AccountThirdParty();
+  }
+
+  AccountThirdParty _partyFromAgentRecord(dynamic raw) {
+    if (raw is! Map) return const AccountThirdParty();
+    final nested = raw['agent'] ??
+        raw['Agent'] ??
+        raw['account'] ??
+        raw['Account'] ??
+        raw['normalAccount'] ??
+        raw['NormalAccount'] ??
+        raw['box'] ??
+        raw['Box'];
+    if (nested != null) {
+      final fromNested = AccountThirdParty(
+        id: pickId(nested),
+        code: pickAccountCode(nested),
+        name: accountNameOf(nested),
+      );
+      if (!fromNested.isEmpty) return fromNested;
+    }
+    return AccountThirdParty(
+      id: pickId(raw),
+      code: pickAccountCode(raw),
+      name: accountNameOf(raw),
+    );
+  }
+
+  Future<void> hydrateProfitAccounts(Iterable<String> codes, {bool force = true}) async {
     final unique = codes.map(normalizeAccountKey).where((c) => c.isNotEmpty).toSet();
-    await Future.wait(unique.map((c) => hydrateAccount(c, force: true)));
+    await Future.wait(unique.map((c) => hydrateAccount(c, force: force)));
     _emit();
   }
 
@@ -1401,6 +1514,10 @@ class AppController extends ChangeNotifier {
   void setTableProfit(String v) {
     tableProfit = v;
     resolvedProfit = null;
+    unawaited(hydrateProfitAccounts(
+      parseProfitTable(v).expand((row) => [row.credit, row.debit]),
+      force: false,
+    ));
     _emit();
   }
 
@@ -1574,6 +1691,7 @@ class AppController extends ChangeNotifier {
     final i = profitEntries.indexWhere((e) => e.id == entry.id);
     if (i >= 0) profitEntries[i] = entry;
     resolvedProfit = null;
+    unawaited(hydrateProfitAccounts([entry.debit, entry.credit], force: false));
     scheduleSaveLocal();
     _emit();
   }
@@ -1673,7 +1791,7 @@ class AppController extends ChangeNotifier {
   List<JournalRow> profitRows() {
     return applyProfitThirdParty(
       buildProfitJournalRows(currentProfitPaste()),
-      profitAccount: chartRevenueProfit,
+      profitAccountOf: profitAccountFor,
     );
   }
 
@@ -2483,7 +2601,7 @@ class AppController extends ChangeNotifier {
         await hydrateProfitAccounts(workingRows.map((r) => r.account));
         workingRows = applyProfitThirdParty(
           buildProfitJournalRows(currentProfitPaste()),
-          profitAccount: chartRevenueProfit,
+          profitAccountOf: profitAccountFor,
         );
         final missing = workingRows
             .map((r) => normalizeAccountKey(r.account))
@@ -2598,6 +2716,20 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  String profitBoxLabelForRow(List<JournalRow> rows, JournalRow line) {
+    if (!line.balancing) return '';
+    if (line.thirdPartyName.isNotEmpty) return line.thirdPartyName;
+    JournalRow? credit;
+    JournalRow? debit;
+    for (final row in rows) {
+      if (line.groupKey.isNotEmpty && row.groupKey != line.groupKey) continue;
+      if (row.balancing) continue;
+      if (credit == null && row.credit.isNotEmpty) credit = row;
+      if (debit == null && row.debit.isNotEmpty) debit = row;
+    }
+    return profitBeneficiaryLabel(credit: credit?.account ?? '', debit: debit?.account ?? '');
+  }
+
   String profitPartyLabel(ProfitPasteRow row) {
     return profitBeneficiaryLabel(credit: row.credit, debit: row.debit);
   }
@@ -2699,7 +2831,7 @@ class AppController extends ChangeNotifier {
     final paste = [for (final group in pending) _profitPasteFromGroup(group)];
     final rebuilt = applyProfitThirdParty(
       buildProfitJournalRows(paste),
-      profitAccount: chartRevenueProfit,
+      profitAccountOf: profitAccountFor,
     );
     var resolved = Map<String, dynamic>.from(prepared.resolved);
     final missing = rebuilt

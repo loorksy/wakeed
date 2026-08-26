@@ -740,13 +740,14 @@ List<JournalRow> buildProfitJournalRows(List<ProfitPasteRow> items) {
   return rows;
 }
 
-/// Posts the profit/كسر line to the chart account under فرع الإيرادات.
-/// Does not invent a default party and never uses the creditor.
+/// Posts the profit/كسر line to the profit box assigned on that voucher's
+/// credit (الدائن) account card in Wakeed. Each account can have its own box.
 List<JournalRow> applyProfitThirdParty(
   List<JournalRow> rows, {
+  AccountThirdParty Function(String accountCode)? profitAccountOf,
   AccountThirdParty profitAccount = const AccountThirdParty(),
 }) {
-  if (rows.isEmpty || profitAccount.isEmpty) return rows;
+  if (rows.isEmpty) return rows;
   final groups = groupRowsByKey(rows);
   final out = <JournalRow>[];
   for (final group in groups) {
@@ -757,10 +758,19 @@ List<JournalRow> applyProfitThirdParty(
       if (credit == null && row.credit.isNotEmpty) credit = row;
       if (debit == null && row.debit.isNotEmpty) debit = row;
     }
-    final tp = (profitAccount.matchesAccountCode(credit?.account ?? '') ||
-            profitAccount.matchesAccountCode(debit?.account ?? ''))
-        ? const AccountThirdParty()
-        : profitAccount;
+    AccountThirdParty tp = const AccountThirdParty();
+    if (credit != null) {
+      final found = profitAccountOf?.call(credit.account) ?? const AccountThirdParty();
+      if (!found.isEmpty &&
+          !found.matchesAccountCode(credit.account) &&
+          !found.matchesAccountCode(debit?.account ?? '')) {
+        tp = found;
+      }
+    }
+    if (tp.isEmpty) tp = profitAccount;
+    if (tp.matchesAccountCode(credit?.account ?? '') || tp.matchesAccountCode(debit?.account ?? '')) {
+      tp = const AccountThirdParty();
+    }
     for (final row in group.rows) {
       final copy = row.copy();
       if (!tp.isEmpty && row.balancing) {
