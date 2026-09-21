@@ -66,9 +66,10 @@ List<Map<String, dynamic>> journalDetailMaps(dynamic journal) {
   ];
 }
 
-void setJournalDetails(Map<String, dynamic> journal, List<Map<String, dynamic>> details) {
-  journal['journalEntryDetails'] = details;
-  journal['JournalEntryDetails'] = details;
+void setJournalDetails(Map journal, List<Map<String, dynamic>> details) {
+  final copied = [for (final detail in details) Map<String, dynamic>.from(detail)];
+  journal['journalEntryDetails'] = copied;
+  journal['JournalEntryDetails'] = copied;
 }
 
 num _detailAmount(Map detail) {
@@ -148,25 +149,31 @@ Map<String, dynamic> unlockJournalPayload(Map<String, dynamic> journal) {
   return journal;
 }
 
+Map<String, dynamic> asMutableJournal(Map journal) {
+  return Map<String, dynamic>.from(journal);
+}
+
 Map<String, dynamic> removeSelectedFromJournal(
-  Map<String, dynamic> journal,
+  Map journal,
   List<LedgerEntry> selected,
 ) {
-  final details = journalDetailMaps(journal);
+  final out = asMutableJournal(journal);
+  final details = journalDetailMaps(out);
   final kept = [
     for (final detail in details)
       if (!selected.any((row) => detailMatchesLedger(detail, row))) detail,
   ];
-  setJournalDetails(journal, kept);
-  return unlockJournalPayload(journal);
+  setJournalDetails(out, kept);
+  return unlockJournalPayload(out);
 }
 
 Map<String, dynamic> applyAccountPatchToJournal(
-  Map<String, dynamic> journal,
+  Map journal,
   List<LedgerEntry> selected,
   LedgerAccountPatch patch,
 ) {
-  final details = journalDetailMaps(journal);
+  final out = asMutableJournal(journal);
+  final details = journalDetailMaps(out);
   final party = AccountThirdParty(
     id: patch.thirdPartyId,
     code: patch.thirdPartyCode,
@@ -186,8 +193,8 @@ Map<String, dynamic> applyAccountPatchToJournal(
       applyThirdPartyFields(detail, party);
     }
   }
-  setJournalDetails(journal, details);
-  return unlockJournalPayload(journal);
+  setJournalDetails(out, details);
+  return unlockJournalPayload(out);
 }
 
 LedgerEntry applyPatchToLedgerRow(LedgerEntry row, LedgerAccountPatch patch) {
