@@ -4,6 +4,9 @@ import 'json_util.dart';
 
 /// Maps Wakeed `GET /api/JournalEntry` rows (docs.wakeed.app Journals)
 /// into local ledger entries. Nothing is written to the platform database.
+///
+/// One remittance voucher becomes one row, even when Wakeed stores
+/// مدين + دائن + طرف ثالث as three journal lines.
 List<LedgerEntry> ledgerFromWakeedJournals(
   dynamic payload, {
   required String ownerKey,
@@ -59,129 +62,39 @@ List<LedgerEntry> _rowsFromJournal(
       .toString();
   final entryDate = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
   final createdAt = (journal['defaultPosting'] ?? journal['DefaultPosting'] ?? dateRaw).toString();
-  final details = asList(journal['journalEntryDetails'] ?? journal['JournalEntryDetails']);
-  final pairs = _detailPairs(details);
-  if (pairs.isEmpty) return const [];
+  final details = [
+    for (final item in asList(journal['journalEntryDetails'] ?? journal['JournalEntryDetails']))
+      if (item is Map) Map<String, dynamic>.from(item),
+  ];
+  final vouchers = classifyJournalVouchers(details);
+  if (vouchers.isEmpty) return const [];
   return [
-    for (final pair in pairs)
+    for (final voucher in vouchers)
       LedgerEntry(
-        id: journalId.isNotEmpty
-            ? '$journalId:${pair.name}:${pair.amount}'
-            : makeId(),
+        id: journalId.isNotEmpty ? '$journalId:${voucher.name}:${voucher.amount}' : makeId(),
         ownerKey: ownerKey,
         createdAt: createdAt,
         entryDate: entryDate,
         journalNumber: journalNumber,
         journalId: journalId,
         kind: 'synced',
-        name: pair.name,
-        amount: pair.amount,
-        debitAccount: _accountCode(pair.debit, accountCodesById),
-        debitAccountName: pair.debitName,
-        creditAccount: _accountCode(pair.credit, accountCodesById),
-        creditAccountName: pair.creditName,
-        thirdPartyAccount: _accountCode(pair.thirdParty, accountCodesById),
-        thirdPartyAccountName: pair.thirdPartyName,
-        notes: pair.notes,
-        statement: pair.name,
+        name: voucher.name,
+        amount: voucher.amount,
+        debitAccount: _accountCode(voucher.debitId, accountCodesById),
+        debitAccountName: voucher.debitName,
+        creditAccount: _accountCode(voucher.creditId, accountCodesById),
+        creditAccountName: voucher.creditName,
+        thirdPartyAccount: _accountCode(voucher.thirdPartyId, accountCodesById),
+        thirdPartyAccountName: voucher.thirdPartyName,
+        notes: voucher.name,
+        statement: voucher.name,
       ),
   ];
-}
-
-class _Pair {
-  _Pair({
-    required this.name,
-    required this.amount,
-    required this.debit,
-    required this.debitName,
-    required this.credit,
-    required this.creditName,
-    required this.notes,
-    this.thirdParty = '',
-    this.thirdPartyName = '',
-  });
-  final String name;
-  final num amount;
-  final String debit;
-  final String debitName;
-  final String credit;
-  final String creditName;
-  final String notes;
-  final String thirdParty;
-  final String thirdPartyName;
-}
-
-List<_Pair> _detailPairs(List<dynamic> details) {
-  final lines = details.whereType<Map>().toList();
-  if (lines.isEmpty) return const [];
-  final byNotes = <String, List<Map>>{};
-  for (final line in lines) {
-    final note = (line['notes'] ?? line['Notes'] ?? '').toString().trim();
-    byNotes.putIfAbsent(note, () => []).add(line);
-  }
-  final pairs = <_Pair>[];
-  for (final entry in byNotes.entries) {
-    pairs.addAll(_pairsFromGroup(entry.value, fallbackName: entry.key));
-  }
-  return pairs;
-}
-
-List<_Pair> _pairsFromGroup(List<Map> lines, {required String fallbackName}) {
-  final debits = lines.where((l) => numOf(l['debit'] ?? l['Debit']) > 0).toList();
-  final credits = lines.where((l) => numOf(l['credit'] ?? l['Credit']) > 0).toList();
-  if (debits.isEmpty || credits.isEmpty) return const [];
-
-  List<Map> left;
-  List<Map> right;
-  if (debits.length == 1 && credits.length > 1) {
-    left = List<Map>.filled(credits.length, debits.first);
-    right = credits;
-  } else if (credits.length == 1 && debits.length > 1) {
-    left = debits;
-    right = List<Map>.filled(debits.length, credits.first);
-  } else {
-    final n = debits.length < credits.length ? debits.length : credits.length;
-    left = debits.take(n).toList();
-    right = credits.take(n).toList();
-  }
-
-  final out = <_Pair>[];
-  for (var i = 0; i < left.length && i < right.length; i++) {
-    final d = left[i];
-    final c = right[i];
-    final amount = numOf(c['credit'] ?? c['Credit']);
-    final amt = amount > 0 ? amount : numOf(d['debit'] ?? d['Debit']);
-    final name = (c['notes'] ?? d['notes'] ?? fallbackName).toString().trim();
-    out.add(_Pair(
-      name: name.isEmpty ? 'سند' : name,
-      amount: amt,
-      debit: (d['normalAccountId'] ?? d['NormalAccountId'] ?? '').toString(),
-      debitName: (d['accountName'] ?? d['AccountName'] ?? '').toString(),
-      credit: (c['normalAccountId'] ?? c['NormalAccountId'] ?? '').toString(),
-      creditName: (c['accountName'] ?? c['AccountName'] ?? '').toString(),
-      notes: name,
-      thirdParty: _pairThirdPartyId(d, c),
-      thirdPartyName: _pairThirdPartyName(d, c),
-    ));
-  }
-  return out;
 }
 
 String _accountCode(String id, Map<String, String> codesById) {
   if (id.isEmpty) return '';
   return codesById[id] ?? '';
-}
-
-String _pairThirdPartyId(Map debit, Map credit) {
-  final fromCredit = pickDetailThirdPartyId(credit);
-  if (fromCredit.isNotEmpty) return fromCredit;
-  return pickDetailThirdPartyId(debit);
-}
-
-String _pairThirdPartyName(Map debit, Map credit) {
-  final fromCredit = pickDetailThirdPartyName(credit);
-  if (fromCredit.isNotEmpty) return fromCredit;
-  return pickDetailThirdPartyName(debit);
 }
 
 Map<String, String> accountCodesById(List<dynamic> accounts) {

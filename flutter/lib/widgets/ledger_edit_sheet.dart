@@ -25,7 +25,6 @@ class _LedgerEditSheetState extends State<_LedgerEditSheet> {
   String debitCode = '';
   String creditCode = '';
   String thirdPartyCode = '';
-  bool saveAsDefaults = true;
 
   Future<void> _pick(String side) async {
     final title = switch (side) {
@@ -70,7 +69,7 @@ class _LedgerEditSheetState extends State<_LedgerEditSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              'اترك الحقل فارغاً إن لم ترد تغييره. التعديل يُطبَّق في وكيد وعلى السجل.',
+              'اترك الحقل فارغاً إن لم ترد تغييره. لا يُحفظ أي حساب كافتراضي. التعديل يُطبَّق في وكيد وعلى السجل.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -97,12 +96,6 @@ class _LedgerEditSheetState extends State<_LedgerEditSheet> {
               onPick: () => _pick('third'),
               onClear: thirdPartyCode.isEmpty ? null : () => setState(() => thirdPartyCode = ''),
             ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: saveAsDefaults,
-              onChanged: (v) => setState(() => saveAsDefaults = v ?? true),
-              title: const Text('حفظ كحسابات افتراضية في إعدادات المستخدم'),
-            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -123,7 +116,6 @@ class _LedgerEditSheetState extends State<_LedgerEditSheet> {
                               debitCode: debitCode,
                               creditCode: creditCode,
                               thirdPartyCode: thirdPartyCode,
-                              saveAsDefaults: saveAsDefaults,
                             );
                           },
                     child: const Text('تطبيق في وكيد'),

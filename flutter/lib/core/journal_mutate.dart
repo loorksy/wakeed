@@ -30,6 +30,47 @@ class LedgerAccountPatch {
   bool get isEmpty => !hasDebit && !hasCredit && !hasThirdParty;
 }
 
+class ClassifiedVoucher {
+  ClassifiedVoucher({
+    required this.name,
+    required this.amount,
+    required this.debitLine,
+    required this.creditLine,
+    this.thirdPartyLine,
+  });
+
+  final String name;
+  final num amount;
+  final Map<String, dynamic> debitLine;
+  final Map<String, dynamic> creditLine;
+  final Map<String, dynamic>? thirdPartyLine;
+
+  String get debitId => detailAccountId(debitLine);
+  String get debitName => detailAccountName(debitLine);
+  String get creditId => detailAccountId(creditLine);
+  String get creditName => detailAccountName(creditLine);
+
+  String get thirdPartyId {
+    if (thirdPartyLine != null) {
+      final id = detailAccountId(thirdPartyLine!);
+      if (id.isNotEmpty) return id;
+    }
+    final fromCredit = pickDetailThirdPartyId(creditLine);
+    if (fromCredit.isNotEmpty) return fromCredit;
+    return pickDetailThirdPartyId(debitLine);
+  }
+
+  String get thirdPartyName {
+    if (thirdPartyLine != null) {
+      final name = detailAccountName(thirdPartyLine!);
+      if (name.isNotEmpty) return name;
+    }
+    final fromCredit = pickDetailThirdPartyName(creditLine);
+    if (fromCredit.isNotEmpty) return fromCredit;
+    return pickDetailThirdPartyName(debitLine);
+  }
+}
+
 String ledgerRowIdentity(LedgerEntry row) {
   return '${row.name.trim()}|${numOf(row.amount)}|${row.entryDate}';
 }
@@ -57,6 +98,12 @@ String skippedNamesText(Iterable<String> names) {
   return names.map((n) => n.trim()).where((n) => n.isNotEmpty).join('\n');
 }
 
+bool isGenericJournalNote(String notes) {
+  final t = notes.trim();
+  if (t.isEmpty) return true;
+  return RegExp(r'^(سند(\s*(حوالة|ربحي|شحن))?|حوالة|profit)$', caseSensitive: false).hasMatch(t);
+}
+
 List<Map<String, dynamic>> journalDetailMaps(dynamic journal) {
   if (journal is! Map) return const [];
   final raw = journal['journalEntryDetails'] ?? journal['JournalEntryDetails'];
@@ -72,14 +119,31 @@ void setJournalDetails(Map journal, List<Map<String, dynamic>> details) {
   journal['JournalEntryDetails'] = copied;
 }
 
+num detailDebit(Map detail) => numOf(detail['debit'] ?? detail['Debit']);
+
+num detailCredit(Map detail) => numOf(detail['credit'] ?? detail['Credit']);
+
 num _detailAmount(Map detail) {
-  final credit = numOf(detail['credit'] ?? detail['Credit']);
+  final credit = detailCredit(detail);
   if (credit > 0) return credit;
-  return numOf(detail['debit'] ?? detail['Debit']);
+  return detailDebit(detail);
 }
 
 String _detailNotes(Map detail) {
   return (detail['notes'] ?? detail['Notes'] ?? '').toString().trim();
+}
+
+String detailAccountId(Map detail) {
+  final v = detail['normalAccountId'] ??
+      detail['NormalAccountId'] ??
+      detail['AccountID'] ??
+      detail['accountID'] ??
+      detail['AccountId'];
+  return v == null ? '' : v.toString().trim();
+}
+
+String detailAccountName(Map detail) {
+  return (detail['accountName'] ?? detail['AccountName'] ?? '').toString().trim();
 }
 
 bool _notesMatchName(String notes, String name) {
@@ -95,15 +159,142 @@ bool _notesMatchName(String notes, String name) {
 }
 
 bool detailMatchesLedger(Map detail, LedgerEntry entry) {
+  if (!_notesMatchName(_detailNotes(detail), entry.name) && !isGenericJournalNote(_detailNotes(detail))) {
+    return false;
+  }
+  if (!_notesMatchName(_detailNotes(detail), entry.name)) return false;
   final amount = _detailAmount(detail);
   if (amount > 0 && (numOf(entry.amount) - amount).abs() > 0.001) return false;
-  return _notesMatchName(_detailNotes(detail), entry.name);
+  return true;
+}
+
+bool voucherMatchesEntry(ClassifiedVoucher voucher, LedgerEntry entry) {
+  final sameName = voucher.name.trim() == entry.name.trim() ||
+      _notesMatchName(voucher.name, entry.name) ||
+      _notesMatchName(entry.name, voucher.name);
+  if (!sameName) return false;
+  if (entry.amount == 0 || voucher.amount == 0) return true;
+  return (numOf(entry.amount) - voucher.amount).abs() < 0.001;
 }
 
 bool selectedCoversWholeJournal(List<LedgerEntry> inJournal, List<LedgerEntry> selected) {
   if (inJournal.isEmpty) return selected.isNotEmpty;
   final keys = selected.map(ledgerRowIdentity).toSet();
   return inJournal.every((row) => keys.contains(ledgerRowIdentity(row)));
+}
+
+String _voucherName(Map debit, Map credit, String fallbackName) {
+  for (final raw in [_detailNotes(credit), _detailNotes(debit), fallbackName]) {
+    final name = raw.trim();
+    if (name.isNotEmpty && !isGenericJournalNote(name)) return name;
+  }
+  final fallback = fallbackName.trim();
+  return fallback.isEmpty ? 'سند' : fallback;
+}
+
+List<ClassifiedVoucher> classifyJournalVouchers(List<Map> lines) {
+  final maps = <Map<String, dynamic>>[
+    for (final line in lines) line is Map<String, dynamic> ? line : Map<String, dynamic>.from(line),
+  ];
+  if (maps.isEmpty) return const [];
+
+  final byNotes = <String, List<Map<String, dynamic>>>{};
+  for (final line in maps) {
+    byNotes.putIfAbsent(_detailNotes(line), () => []).add(line);
+  }
+
+  final named = <String, List<Map<String, dynamic>>>{};
+  final generic = <Map<String, dynamic>>[];
+  byNotes.forEach((note, group) {
+    if (isGenericJournalNote(note)) {
+      generic.addAll(group);
+    } else {
+      named[note] = group;
+    }
+  });
+
+  if (named.isEmpty) {
+    return _vouchersFromLines(generic, fallbackName: 'سند');
+  }
+  if (named.length == 1) {
+    final name = named.keys.first;
+    return _vouchersFromLines([...named[name]!, ...generic], fallbackName: name);
+  }
+
+  final out = <ClassifiedVoucher>[];
+  for (final entry in named.entries) {
+    out.addAll(_vouchersFromLines(entry.value, fallbackName: entry.key));
+  }
+  if (generic.length == 1 && out.length == 1 && out.first.thirdPartyLine == null) {
+    return [
+      ClassifiedVoucher(
+        name: out.first.name,
+        amount: out.first.amount,
+        debitLine: out.first.debitLine,
+        creditLine: out.first.creditLine,
+        thirdPartyLine: generic.first,
+      ),
+    ];
+  }
+  return out;
+}
+
+List<ClassifiedVoucher> _vouchersFromLines(
+  List<Map<String, dynamic>> lines, {
+  required String fallbackName,
+}) {
+  final debits = lines.where((l) => detailDebit(l) > 0).toList();
+  final credits = lines.where((l) => detailCredit(l) > 0).toList();
+  if (debits.isEmpty || credits.isEmpty) return const [];
+
+  final unusedD = [...debits];
+  final unusedC = [...credits];
+  final pairs = <({Map<String, dynamic> d, Map<String, dynamic> c})>[];
+
+  bool takeEqual() {
+    for (var i = 0; i < unusedD.length; i++) {
+      for (var j = 0; j < unusedC.length; j++) {
+        if ((detailDebit(unusedD[i]) - detailCredit(unusedC[j])).abs() < 0.001) {
+          pairs.add((d: unusedD.removeAt(i), c: unusedC.removeAt(j)));
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  while (takeEqual()) {}
+  while (unusedD.isNotEmpty && unusedC.isNotEmpty) {
+    var bestI = 0;
+    var bestJ = 0;
+    num best = double.infinity;
+    for (var i = 0; i < unusedD.length; i++) {
+      for (var j = 0; j < unusedC.length; j++) {
+        final diff = (detailDebit(unusedD[i]) - detailCredit(unusedC[j])).abs();
+        if (diff < best) {
+          best = diff;
+          bestI = i;
+          bestJ = j;
+        }
+      }
+    }
+    pairs.add((d: unusedD.removeAt(bestI), c: unusedC.removeAt(bestJ)));
+  }
+
+  final paired = <Map>{for (final p in pairs) p.d, for (final p in pairs) p.c};
+  final leftover = [for (final line in lines) if (!paired.contains(line)) line];
+  final sharedThird = leftover.length == 1 ? leftover.first : null;
+
+  return [
+    for (final pair in pairs)
+      ClassifiedVoucher(
+        name: _voucherName(pair.d, pair.c, fallbackName),
+        amount: detailCredit(pair.c) > 0 ? detailCredit(pair.c) : detailDebit(pair.d),
+        debitLine: pair.d,
+        creditLine: pair.c,
+        thirdPartyLine: sharedThird,
+      ),
+  ];
 }
 
 void applyAccountFields(
@@ -129,8 +320,11 @@ void applyThirdPartyFields(Map<String, dynamic> detail, AccountThirdParty party)
   if (party.id.isNotEmpty) {
     detail['correspondingAccountID'] = party.id;
     detail['CorrespondingAccountID'] = party.id;
+    detail['correspondingAccountId'] = party.id;
+    detail['CorrespondingAccountId'] = party.id;
     detail['oppositeAccountID'] = party.id;
     detail['OppositeAccountID'] = party.id;
+    detail['oppositeAccountId'] = party.id;
   }
   applyAccountThirdPartyFields(detail, party);
   if (party.name.isNotEmpty) {
@@ -159,10 +353,15 @@ Map<String, dynamic> removeSelectedFromJournal(
 ) {
   final out = asMutableJournal(journal);
   final details = journalDetailMaps(out);
-  final kept = [
-    for (final detail in details)
-      if (!selected.any((row) => detailMatchesLedger(detail, row))) detail,
-  ];
+  final classified = classifyJournalVouchers(details);
+  final drop = <Map>{};
+  for (final voucher in classified) {
+    if (!selected.any((row) => voucherMatchesEntry(voucher, row))) continue;
+    drop.add(voucher.debitLine);
+    drop.add(voucher.creditLine);
+    if (voucher.thirdPartyLine != null) drop.add(voucher.thirdPartyLine!);
+  }
+  final kept = [for (final detail in details) if (!drop.contains(detail)) detail];
   setJournalDetails(out, kept);
   return unlockJournalPayload(out);
 }
@@ -174,23 +373,29 @@ Map<String, dynamic> applyAccountPatchToJournal(
 ) {
   final out = asMutableJournal(journal);
   final details = journalDetailMaps(out);
+  final classified = classifyJournalVouchers(details);
   final party = AccountThirdParty(
     id: patch.thirdPartyId,
     code: patch.thirdPartyCode,
     name: patch.thirdPartyName,
   );
-  for (final detail in details) {
-    if (!selected.any((row) => detailMatchesLedger(detail, row))) continue;
-    final debit = numOf(detail['debit'] ?? detail['Debit']);
-    final credit = numOf(detail['credit'] ?? detail['Credit']);
-    if (debit > 0 && patch.hasDebit) {
-      applyAccountFields(detail, id: patch.debitId, name: patch.debitName);
+  for (final voucher in classified) {
+    if (!selected.any((row) => voucherMatchesEntry(voucher, row))) continue;
+    if (patch.hasDebit) {
+      applyAccountFields(voucher.debitLine, id: patch.debitId, name: patch.debitName);
     }
-    if (credit > 0 && patch.hasCredit) {
-      applyAccountFields(detail, id: patch.creditId, name: patch.creditName);
+    if (patch.hasCredit) {
+      applyAccountFields(voucher.creditLine, id: patch.creditId, name: patch.creditName);
     }
     if (patch.hasThirdParty) {
-      applyThirdPartyFields(detail, party);
+      if (voucher.thirdPartyLine != null) {
+        applyAccountFields(voucher.thirdPartyLine!, id: patch.thirdPartyId, name: patch.thirdPartyName);
+      }
+      applyThirdPartyFields(voucher.debitLine, party);
+      applyThirdPartyFields(voucher.creditLine, party);
+      if (voucher.thirdPartyLine != null) {
+        applyThirdPartyFields(voucher.thirdPartyLine!, party);
+      }
     }
   }
   setJournalDetails(out, details);
@@ -211,6 +416,7 @@ LedgerEntry applyPatchToLedgerRow(LedgerEntry row, LedgerAccountPatch patch) {
 String pickDetailThirdPartyId(Map detail) {
   final v = detail['correspondingAccountID'] ??
       detail['CorrespondingAccountID'] ??
+      detail['correspondingAccountId'] ??
       detail['thirdPartyID'] ??
       detail['ThirdPartyId'] ??
       detail['thirdPartyId'] ??

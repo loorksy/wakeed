@@ -146,6 +146,40 @@ void main() {
     expect(details[2]['normalAccountId'], 'keep-d');
   });
 
+  test('patches the actual third-party journal line not only corresponding fields', () {
+    final journal = {
+      'journalEntryDetails': [
+        {'notes': 'علي', 'debit': 100, 'credit': 0, 'normalAccountId': 'd1', 'accountName': 'مدين'},
+        {'notes': 'علي', 'debit': 0, 'credit': 100, 'normalAccountId': 'c1', 'accountName': 'دائن'},
+        {'notes': 'سند حوالة', 'debit': 0, 'credit': 4, 'normalAccountId': 'old-tp', 'accountName': 'قديم'},
+      ],
+    };
+    final patched = applyAccountPatchToJournal(
+      journal,
+      [_row(id: '1', name: 'علي', amount: 100)],
+      const LedgerAccountPatch(thirdPartyId: 'new-tp', thirdPartyName: 'عمولة جديدة', thirdPartyCode: '422'),
+    );
+    final details = journalDetailMaps(patched);
+    expect(details.length, 3);
+    expect(details[0]['normalAccountId'], 'd1');
+    expect(details[1]['normalAccountId'], 'c1');
+    expect(details[2]['normalAccountId'], 'new-tp');
+    expect(details[2]['accountName'], 'عمولة جديدة');
+    expect(details[0]['correspondingAccountID'], 'new-tp');
+  });
+
+  test('deletes the third-party leftover line with the voucher', () {
+    final journal = {
+      'journalEntryDetails': [
+        {'notes': 'علي', 'debit': 100, 'credit': 0, 'normalAccountId': 'd1'},
+        {'notes': 'علي', 'debit': 0, 'credit': 100, 'normalAccountId': 'c1'},
+        {'notes': 'سند حوالة', 'debit': 0, 'credit': 4, 'normalAccountId': 'tp1'},
+      ],
+    };
+    final updated = removeSelectedFromJournal(journal, [_row(id: '1', name: 'علي', amount: 100)]);
+    expect(journalDetailMaps(updated), isEmpty);
+  });
+
   test('applyPatchToLedgerRow updates only filled sides', () {
     final row = _row(id: '1', name: 'علي', amount: 10);
     final next = applyPatchToLedgerRow(

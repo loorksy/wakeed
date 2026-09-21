@@ -2324,9 +2324,24 @@ class AppController extends ChangeNotifier {
       final debit = resolvedAccountInfo(resolved, debitRow.account);
       final credit = resolvedAccountInfo(resolved, creditRow.account);
       final amount = numOf(debitRow.debit.isNotEmpty ? debitRow.debit : creditRow.credit);
-      final tp = postingThirdPartyFor(
-        creditRow.account.isNotEmpty ? creditRow.account : debitRow.account,
-      );
+      String tpCode = '';
+      String tpName = '';
+      for (final row in group.rows) {
+        if (row.balancing && row.account.trim().isNotEmpty) {
+          tpCode = row.account.trim();
+          tpName = row.thirdPartyName.trim();
+          break;
+        }
+      }
+      if (tpCode.isEmpty) {
+        for (final row in group.rows) {
+          if (row.thirdPartyName.trim().isNotEmpty) {
+            tpName = row.thirdPartyName.trim();
+            break;
+          }
+        }
+      }
+      final tpInfo = tpCode.isNotEmpty ? resolvedAccountInfo(resolved, tpCode) : const {'code': '', 'name': ''};
       return LedgerEntry(
         id: makeId(),
         ownerKey: currentOwnerKey(),
@@ -2341,8 +2356,8 @@ class AppController extends ChangeNotifier {
         debitAccountName: debit['name'] ?? '',
         creditAccount: credit['code'] ?? '',
         creditAccountName: credit['name'] ?? '',
-        thirdPartyAccount: tp.code,
-        thirdPartyAccountName: tp.name,
+        thirdPartyAccount: (tpInfo['code'] ?? '').isNotEmpty ? tpInfo['code']! : tpCode,
+        thirdPartyAccountName: (tpInfo['name'] ?? '').isNotEmpty ? tpInfo['name']! : tpName,
         notes: extra,
         statement: groupStatement(group, section),
       );
@@ -3408,7 +3423,6 @@ class AppController extends ChangeNotifier {
     String debitCode = '',
     String creditCode = '',
     String thirdPartyCode = '',
-    bool saveAsDefaults = true,
   }) async {
     final selected = selectedLedgerEntries();
     if (selected.isEmpty) {
@@ -3436,11 +3450,6 @@ class AppController extends ChangeNotifier {
       }
       if (patch.hasThirdParty && patch.thirdPartyId.isEmpty) {
         throw PlatformApiException('تعذر إيجاد حساب الطرف الثالث في دليل وكيد.');
-      }
-      if (saveAsDefaults) {
-        if (patch.hasDebit) selectDebitAccount(patch.debitCode);
-        if (patch.hasCredit) selectCreditAccount(patch.creditCode);
-        if (patch.hasThirdParty) selectThirdPartyAccount(patch.thirdPartyCode);
       }
       final grouped = groupLedgerByJournal(selected);
       final ok = <String>[];
