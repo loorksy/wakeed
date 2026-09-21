@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/constants.dart';
 import '../core/exceptions.dart';
+import '../core/journal_mutate.dart';
 import '../core/journal_sync.dart';
 import '../core/json_util.dart';
 import '../core/remittance_parser.dart';
@@ -90,6 +91,8 @@ class AppController extends ChangeNotifier {
   String ledgerTo = '';
   String ledgerKind = '';
   int ledgerPage = 0;
+  final Set<String> ledgerSelectedIds = {};
+  bool ledgerBusy = false;
 
   Map<String, dynamic>? resolvedBatch;
   Map<String, dynamic>? resolvedEach;
@@ -2321,6 +2324,24 @@ class AppController extends ChangeNotifier {
       final debit = resolvedAccountInfo(resolved, debitRow.account);
       final credit = resolvedAccountInfo(resolved, creditRow.account);
       final amount = numOf(debitRow.debit.isNotEmpty ? debitRow.debit : creditRow.credit);
+      String tpCode = '';
+      String tpName = '';
+      for (final row in group.rows) {
+        if (row.balancing && row.account.trim().isNotEmpty) {
+          tpCode = row.account.trim();
+          tpName = row.thirdPartyName.trim();
+          break;
+        }
+      }
+      if (tpCode.isEmpty) {
+        for (final row in group.rows) {
+          if (row.thirdPartyName.trim().isNotEmpty) {
+            tpName = row.thirdPartyName.trim();
+            break;
+          }
+        }
+      }
+      final tpInfo = tpCode.isNotEmpty ? resolvedAccountInfo(resolved, tpCode) : const {'code': '', 'name': ''};
       return LedgerEntry(
         id: makeId(),
         ownerKey: currentOwnerKey(),
@@ -2335,6 +2356,8 @@ class AppController extends ChangeNotifier {
         debitAccountName: debit['name'] ?? '',
         creditAccount: credit['code'] ?? '',
         creditAccountName: credit['name'] ?? '',
+        thirdPartyAccount: (tpInfo['code'] ?? '').isNotEmpty ? tpInfo['code']! : tpCode,
+        thirdPartyAccountName: (tpInfo['name'] ?? '').isNotEmpty ? tpInfo['name']! : tpName,
         notes: extra,
         statement: groupStatement(group, section),
       );
@@ -2448,6 +2471,8 @@ class AppController extends ChangeNotifier {
         row.debitAccountName,
         row.creditAccount,
         row.creditAccountName,
+        row.thirdPartyAccount,
+        row.thirdPartyAccountName,
         row.notes,
         row.statement,
         ledgerKindLabel(row.kind),
@@ -2469,6 +2494,8 @@ class AppController extends ChangeNotifier {
       'اسم المدين',
       'الدائن',
       'اسم الدائن',
+      'طرف ثالث',
+      'اسم الطرف الثالث',
       'البيان',
       'الملاحظة',
       'النوع',
@@ -2485,6 +2512,8 @@ class AppController extends ChangeNotifier {
         row.debitAccountName,
         row.creditAccount,
         row.creditAccountName,
+        row.thirdPartyAccount,
+        row.thirdPartyAccountName,
         row.statement,
         row.notes,
         ledgerKindLabel(row.kind),
@@ -2556,14 +2585,26 @@ class AppController extends ChangeNotifier {
     _emit();
   }
 
-  void showSubmitSuccess(String title, String message, [String details = '', bool job = false]) {
+  void showSubmitSuccess(
+    String title,
+    String message, [
+    String details = '',
+    bool job = false,
+    List<String> skippedNames = const [],
+  ]) {
     if (job) {
       submitJob.phase = SubmitPhase.success;
       submitJob.title = title;
       submitJob.message = message;
       submitJob.details = details;
     }
-    lastDialog = DialogData(phase: SubmitPhase.success, title: title, message: message, details: details);
+    lastDialog = DialogData(
+      phase: SubmitPhase.success,
+      title: title,
+      message: message,
+      details: details,
+      skippedNames: skippedNames,
+    );
     _persistDialog(lastDialog);
     notifications?.showDone(title, message, success: true);
     _emit();
@@ -2855,6 +2896,7 @@ class AppController extends ChangeNotifier {
         'كل السندات (${remittanceGroups.length}) مسجّلة مسبقاً في السجل لهذا التاريخ.',
         skipped.map((g) => g.name).join('\n'),
         true,
+        skipped.map((g) => g.name).toList(),
       );
       clearProfitForm();
       return;
@@ -2905,7 +2947,13 @@ class AppController extends ChangeNotifier {
         skipNote.trim(),
         'تمت إضافة السجل — راجع تبويب «السجل».',
       ].where((s) => s.toString().isNotEmpty).join('\n');
-      showSubmitSuccess('تم التسجيل بنجاح', 'تم حفظ السند الربحي الجماعي في وكيد.$skipNote', details, true);
+      showSubmitSuccess(
+        'تم التسجيل بنجاح',
+        'تم حفظ السند الربحي الجماعي في وكيد.$skipNote',
+        details,
+        true,
+        skipped.map((g) => g.name).toList(),
+      );
       clearProfitForm();
       return;
     }
@@ -2954,6 +3002,7 @@ class AppController extends ChangeNotifier {
         'تم حفظ ${ok.length} سنداً ربحياً في وكيد.$skipNote',
         '${lines.join('\n')}\nكل سند حُفظ في السجل فور نجاحه — راجع تبويب «السجل».',
         true,
+        skipped.map((g) => g.name).toList(),
       );
       clearProfitForm();
     } else {
@@ -2966,6 +3015,7 @@ class AppController extends ChangeNotifier {
         'نجح ${ok.length} سنداً (محفوظ في السجل) وفشل ${failed.length}.$skipNote\nأعد الإنشاء لإكمال المتبقي — المنجز موجود في السجل.',
         lines.join('\n'),
         true,
+        skipped.map((g) => g.name).toList(),
       );
     }
   }
@@ -2982,6 +3032,7 @@ class AppController extends ChangeNotifier {
         'كل العملاء (${allGroups.length}) مسجّلون مسبقاً في السجل لهذا التاريخ.',
         skipped.map((g) => g.name).join('\n'),
         true,
+        skipped.map((g) => g.name).toList(),
       );
       return;
     }
@@ -3012,7 +3063,13 @@ class AppController extends ChangeNotifier {
       skipNote.trim(),
       'تمت إضافة السجل — راجع تبويب «السجل».',
     ].where((s) => s.toString().isNotEmpty).join('\n');
-    showSubmitSuccess('تم التسجيل بنجاح', 'تم حفظ السند الجماعي في وكيد.$skipNote', details, true);
+    showSubmitSuccess(
+      'تم التسجيل بنجاح',
+      'تم حفظ السند الجماعي في وكيد.$skipNote',
+      details,
+      true,
+      skipped.map((g) => g.name).toList(),
+    );
     clearBatchForm();
   }
 
@@ -3033,6 +3090,7 @@ class AppController extends ChangeNotifier {
         'كل العملاء (${groups.length}) مسجّلون مسبقاً في السجل لهذا التاريخ.',
         skipped.map((g) => g.name).join('\n'),
         true,
+        skipped.map((g) => g.name).toList(),
       );
       if (section == 'manual') {
         clearManualForm();
@@ -3085,6 +3143,7 @@ class AppController extends ChangeNotifier {
         'تم حفظ ${ok.length} سنداً في وكيد.$skipNote',
         '${lines.join('\n')}\nكل سند حُفظ في السجل فور نجاحه — راجع تبويب «السجل».',
         true,
+        skipped.map((g) => g.name).toList(),
       );
       if (section == 'manual') {
         clearManualForm();
@@ -3103,6 +3162,7 @@ class AppController extends ChangeNotifier {
         'نجح ${ok.length} سنداً (محفوظ في السجل) وفشل ${failed.length}.$skipNote\nأعد الإنشاء لإكمال المتبقي — المنجز موجود في السجل.',
         lines.join('\n'),
         true,
+        skipped.map((g) => g.name).toList(),
       );
     }
   }
@@ -3159,11 +3219,370 @@ class AppController extends ChangeNotifier {
         return !remoteKeys.contains(key);
       }).toList();
       serverLedgerCache = [...localOnly, ...remote];
+      _pruneLedgerSelection();
       _persistLedger();
     } catch (_) {
       // Keep the on-device cache if Wakeed listing fails.
     } finally {
       ledgerSyncing = false;
+      _emit();
+    }
+  }
+
+  List<LedgerEntry> selectedLedgerEntries() {
+    final ids = ledgerSelectedIds;
+    return ownerLedger().where((row) => ids.contains(row.id)).toList();
+  }
+
+  void toggleLedgerSelection(String id) {
+    if (id.isEmpty) return;
+    if (ledgerSelectedIds.contains(id)) {
+      ledgerSelectedIds.remove(id);
+    } else {
+      ledgerSelectedIds.add(id);
+    }
+    _emit();
+  }
+
+  void selectAllFilteredLedger() {
+    final ids = filteredLedger().map((e) => e.id).where((id) => id.isNotEmpty).toSet();
+    if (ids.isEmpty) return;
+    final allOn = ids.every(ledgerSelectedIds.contains);
+    if (allOn) {
+      ledgerSelectedIds.removeAll(ids);
+    } else {
+      ledgerSelectedIds.addAll(ids);
+    }
+    _emit();
+  }
+
+  void clearLedgerSelection() {
+    if (ledgerSelectedIds.isEmpty) return;
+    ledgerSelectedIds.clear();
+    _emit();
+  }
+
+  void _pruneLedgerSelection() {
+    final ids = serverLedgerCache.map((e) => e.id).toSet();
+    ledgerSelectedIds.removeWhere((id) => !ids.contains(id));
+  }
+
+  void _replaceLedgerRows(Iterable<LedgerEntry> nextRows) {
+    final byId = {for (final row in nextRows) row.id: row};
+    serverLedgerCache = [
+      for (final row in serverLedgerCache) byId[row.id] ?? row,
+    ];
+    _persistLedger();
+  }
+
+  void _removeLedgerRows(Iterable<String> ids) {
+    final drop = ids.toSet();
+    serverLedgerCache = serverLedgerCache.where((row) => !drop.contains(row.id)).toList();
+    ledgerSelectedIds.removeAll(drop);
+    _persistLedger();
+  }
+
+  Future<Map<String, dynamic>> _fetchJournalEntry(String id) async {
+    final attempts = [
+      '/api/JournalEntry/$id',
+      '/api/JournalEntry/GetById?id=${Uri.encodeComponent(id)}',
+    ];
+    Object? lastErr;
+    for (final path in attempts) {
+      try {
+        final full = unwrapCreated(await _api('GET', path));
+        if (full is Map && pickId(full).isNotEmpty) {
+          return Map<String, dynamic>.from(full);
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr ?? PlatformApiException('تعذر جلب السند من وكيد.');
+  }
+
+  Future<void> _deleteJournalEntry(String id) async {
+    try {
+      await _api('DELETE', '/api/JournalEntry?id=${Uri.encodeComponent(id)}&reconciliationCheck=false');
+    } catch (_) {
+      await _api(
+        'DELETE',
+        '/api/JournalEntry/DeleteManyJournals?ids=${Uri.encodeComponent(id)}&reconciliationCheck=false',
+      );
+    }
+  }
+
+  Future<void> _updateJournalEntry(Map<String, dynamic> journal) async {
+    const query = 'reconciliationCheck=false';
+    try {
+      await _api('PUT', '/api/JournalEntry/UpdateJournalEntry?$query', journal);
+    } catch (_) {
+      try {
+        await _api('PUT', '/api/JournalEntry/UpdateJournalEntry?$query', journal, {'asForm': true});
+      } catch (_) {
+        try {
+          await _api('PUT', '/api/JournalEntry?$query', journal);
+        } catch (_) {
+          await _api('PUT', '/api/JournalEntry?$query', journal, {'asForm': true});
+        }
+      }
+    }
+  }
+
+  Map<String, dynamic> _cloneJournal(Map journal) {
+    return sanitizeJournalForUpdate(journal);
+  }
+
+  Future<LedgerAccountPatch> _resolveLedgerPatch({
+    required String debitCode,
+    required String creditCode,
+    required String thirdPartyCode,
+  }) async {
+    dynamic debit;
+    dynamic credit;
+    dynamic third;
+    if (debitCode.isNotEmpty) debit = await resolveAccount(debitCode);
+    if (creditCode.isNotEmpty) credit = await resolveAccount(creditCode);
+    if (thirdPartyCode.isNotEmpty) third = await resolveAccount(thirdPartyCode);
+    return LedgerAccountPatch(
+      debitId: pickId(debit),
+      debitCode: pickAccountCode(debit).isNotEmpty ? pickAccountCode(debit) : debitCode,
+      debitName: accountNameOf(debit),
+      creditId: pickId(credit),
+      creditCode: pickAccountCode(credit).isNotEmpty ? pickAccountCode(credit) : creditCode,
+      creditName: accountNameOf(credit),
+      thirdPartyId: pickId(third),
+      thirdPartyCode: pickAccountCode(third).isNotEmpty ? pickAccountCode(third) : thirdPartyCode,
+      thirdPartyName: accountNameOf(third),
+    );
+  }
+
+  Future<void> deleteSelectedLedgers() async {
+    final selected = selectedLedgerEntries();
+    if (selected.isEmpty) {
+      showSubmitError('لا تحديد', 'اختر سنداً واحداً على الأقل للحذف.');
+      return;
+    }
+    if (ledgerBusy || submitJob.active) return;
+    ledgerBusy = true;
+    _emit();
+    final grouped = groupLedgerByJournal(selected);
+    final all = ownerLedger();
+    final ok = <String>[];
+    final failed = <String>[];
+    try {
+      await mapPool(grouped.entries.toList(), journalParallel, (entry, _) async {
+        final journalId = entry.key;
+        final rows = entry.value;
+        final label = rows.map((r) => r.name).where((n) => n.isNotEmpty).join('، ');
+        if (!isWakeedJournalId(journalId)) {
+          failed.add('${label.isEmpty ? 'سند' : label}: لا يوجد معرف وكيد قابل للحذف.');
+          return;
+        }
+        try {
+          final inJournal = all.where((r) => r.journalId == journalId).toList();
+          if (selectedCoversWholeJournal(inJournal, rows)) {
+            await _deleteJournalEntry(journalId);
+            _removeLedgerRows(inJournal.map((r) => r.id));
+          } else {
+            final journal = _cloneJournal(await _fetchJournalEntry(journalId));
+            final updated = removeSelectedFromJournal(journal, rows);
+            if (journalDetailMaps(updated).isEmpty) {
+              await _deleteJournalEntry(journalId);
+              _removeLedgerRows(inJournal.map((r) => r.id));
+            } else {
+              await _updateJournalEntry(updated);
+              _removeLedgerRows(rows.map((r) => r.id));
+            }
+          }
+          ok.add(label.isEmpty ? journalId : label);
+        } catch (err) {
+          failed.add('${label.isEmpty ? journalId : label}: ${friendlyError(err)}');
+        }
+      });
+      _pruneLedgerSelection();
+      if (failed.isEmpty) {
+        showSubmitSuccess(
+          'تم الحذف من وكيد',
+          'حُذف ${selected.length} اسماً من حسابك في وكيد ومن السجل.',
+          ok.join('\n'),
+        );
+      } else if (ok.isEmpty) {
+        showSubmitError('فشل الحذف', 'لم يُحذف أي سند من وكيد.', failed.join('\n'));
+      } else {
+        showSubmitSuccess(
+          'حُذف جزئياً',
+          'نجح ${ok.length} وفشل ${failed.length}.',
+          [...ok.map((n) => '✓ $n'), ...failed.map((n) => '✗ $n')].join('\n'),
+        );
+      }
+    } finally {
+      ledgerBusy = false;
+      _emit();
+    }
+  }
+
+  Future<void> updateSelectedLedgerAccounts({
+    String debitCode = '',
+    String creditCode = '',
+    String thirdPartyCode = '',
+  }) async {
+    final selected = selectedLedgerEntries();
+    if (selected.isEmpty) {
+      showSubmitError('لا تحديد', 'اختر سنداً واحداً على الأقل للتعديل.');
+      return;
+    }
+    if (debitCode.trim().isEmpty && creditCode.trim().isEmpty && thirdPartyCode.trim().isEmpty) {
+      showSubmitError('لا تغيير', 'اختر المدين أو الدائن أو الطرف الثالث.');
+      return;
+    }
+    if (ledgerBusy || submitJob.active) return;
+    ledgerBusy = true;
+    _emit();
+    try {
+      final patch = await _resolveLedgerPatch(
+        debitCode: debitCode.trim(),
+        creditCode: creditCode.trim(),
+        thirdPartyCode: thirdPartyCode.trim(),
+      );
+      if (patch.hasDebit && patch.debitId.isEmpty) {
+        throw PlatformApiException('تعذر إيجاد حساب المدين في دليل وكيد.');
+      }
+      if (patch.hasCredit && patch.creditId.isEmpty) {
+        throw PlatformApiException('تعذر إيجاد حساب الدائن في دليل وكيد.');
+      }
+      if (patch.hasThirdParty && patch.thirdPartyId.isEmpty) {
+        throw PlatformApiException('تعذر إيجاد حساب الطرف الثالث في دليل وكيد.');
+      }
+      final currentThirdPartyIds = <String, String>{};
+      if (patch.hasThirdParty) {
+        for (final row in selected) {
+          final code = row.thirdPartyAccount.trim();
+          if (code.isEmpty) continue;
+          try {
+            final resolved = await resolveAccount(code);
+            final id = pickId(resolved);
+            if (id.isNotEmpty) currentThirdPartyIds[ledgerRowIdentity(row)] = id;
+          } catch (_) {}
+        }
+      }
+      final grouped = groupLedgerByJournal(selected);
+      final ok = <String>[];
+      final failed = <String>[];
+      await mapPool(grouped.entries.toList(), journalParallel, (entry, _) async {
+        final journalId = entry.key;
+        final rows = entry.value;
+        final label = rows.map((r) => r.name).where((n) => n.isNotEmpty).join('، ');
+        if (!isWakeedJournalId(journalId)) {
+          failed.add('${label.isEmpty ? 'سند' : label}: لا يوجد معرف وكيد قابل للتعديل.');
+          return;
+        }
+        try {
+          final journal = _cloneJournal(await _fetchJournalEntry(journalId));
+          final detailsBefore = journalDetailMaps(journal);
+          final classifiedBefore = classifyJournalVouchers(detailsBefore);
+          if (patch.hasThirdParty) {
+            for (final row in rows) {
+              ClassifiedVoucher? voucher;
+              for (final item in classifiedBefore) {
+                if (voucherMatchesEntry(item, row)) {
+                  voucher = item;
+                  break;
+                }
+              }
+              if (voucher == null) {
+                throw PlatformApiException('تعذر مطابقة السند ${row.name} في وكيد.');
+              }
+              final line = findThirdPartyLine(
+                detailsBefore,
+                voucher,
+                row,
+                currentId: currentThirdPartyIds[ledgerRowIdentity(row)] ?? '',
+              );
+              if (line == null) {
+                throw PlatformApiException(
+                  'تعذر إيجاد الخانة الثالثة (الطرف الثالث) في سند ${row.name}.',
+                );
+              }
+            }
+          }
+          final updated = applyAccountPatchToJournal(
+            journal,
+            rows,
+            patch,
+            currentThirdPartyIds: currentThirdPartyIds,
+          );
+          Future<bool> thirdPartySaved(Map journalAfter) async {
+            if (!patch.hasThirdParty) return true;
+            final detailsAfter = journalDetailMaps(journalAfter);
+            final classifiedAfter = classifyJournalVouchers(detailsAfter);
+            for (final row in rows) {
+              ClassifiedVoucher? voucher;
+              for (final item in classifiedAfter) {
+                if (voucherMatchesEntry(item, row)) {
+                  voucher = item;
+                  break;
+                }
+              }
+              final line = voucher == null
+                  ? null
+                  : findThirdPartyLine(
+                      detailsAfter,
+                      voucher,
+                      row.copyWith(
+                        thirdPartyAccount: patch.thirdPartyCode,
+                        thirdPartyAccountName: patch.thirdPartyName,
+                      ),
+                      currentId: patch.thirdPartyId,
+                    );
+              if (!thirdPartyLineHasAccount(line, patch)) return false;
+            }
+            return true;
+          }
+
+          await _updateJournalEntry(updated);
+          var confirmed = _cloneJournal(await _fetchJournalEntry(journalId));
+          if (!await thirdPartySaved(confirmed)) {
+            const query = 'reconciliationCheck=false';
+            await _api('PUT', '/api/JournalEntry/UpdateJournalEntry?$query', updated, {'asForm': true});
+            confirmed = _cloneJournal(await _fetchJournalEntry(journalId));
+          }
+          if (!await thirdPartySaved(confirmed)) {
+            throw PlatformApiException(
+              'وكيد لم يحفظ حساب الطرف الثالث في الخانة الثالثة لسند ${label.isEmpty ? journalId : label}.',
+            );
+          }
+          _replaceLedgerRows(rows.map((row) => applyPatchToLedgerRow(row, patch)));
+          ok.add(label.isEmpty ? journalId : label);
+        } catch (err) {
+          failed.add('${label.isEmpty ? journalId : label}: ${friendlyError(err)}');
+        }
+      });
+      final changed = [
+        if (patch.hasDebit) 'مدين ${patch.debitName.isNotEmpty ? patch.debitName : patch.debitCode}',
+        if (patch.hasCredit) 'دائن ${patch.creditName.isNotEmpty ? patch.creditName : patch.creditCode}',
+        if (patch.hasThirdParty)
+          'طرف ثالث ${patch.thirdPartyName.isNotEmpty ? patch.thirdPartyName : patch.thirdPartyCode}',
+      ].join(' · ');
+      if (failed.isEmpty) {
+        showSubmitSuccess(
+          'تم التعديل في وكيد',
+          'عُدلت حسابات ${selected.length} اسماً في حسابك.$changed',
+          ok.join('\n'),
+        );
+      } else if (ok.isEmpty) {
+        showSubmitError('فشل التعديل', 'لم يُحدَّث أي سند في وكيد.', failed.join('\n'));
+      } else {
+        showSubmitSuccess(
+          'عُدل جزئياً',
+          'نجح ${ok.length} وفشل ${failed.length}. $changed',
+          [...ok.map((n) => '✓ $n'), ...failed.map((n) => '✗ $n')].join('\n'),
+        );
+      }
+    } catch (err) {
+      showSubmitError('فشل التعديل', friendlyError(err));
+    } finally {
+      ledgerBusy = false;
       _emit();
     }
   }
@@ -3187,6 +3606,8 @@ class AppController extends ChangeNotifier {
           'اسم المدين',
           'الدائن',
           'اسم الدائن',
+          'طرف ثالث',
+          'اسم الطرف الثالث',
           'البيان',
           'الملاحظة',
           'النوع',
@@ -3203,6 +3624,8 @@ class AppController extends ChangeNotifier {
               row.debitAccountName,
               row.creditAccount,
               row.creditAccountName,
+              row.thirdPartyAccount,
+              row.thirdPartyAccountName,
               row.statement,
               row.notes,
               ledgerKindLabel(row.kind),
@@ -3232,18 +3655,24 @@ class DialogData {
     required this.title,
     this.message = '',
     this.details = '',
-  });
+    List<String> skippedNames = const [],
+  }) : skippedNames = [
+          for (final n in skippedNames)
+            if (n.trim().isNotEmpty) n.trim(),
+        ];
 
   final SubmitPhase phase;
   final String title;
   final String message;
   final String details;
+  final List<String> skippedNames;
 
   Map<String, dynamic> toJson() => {
         'phase': phase.name,
         'title': title,
         'message': message,
         'details': details,
+        'skippedNames': skippedNames,
       };
 
   factory DialogData.fromJson(Map<String, dynamic> json) {
@@ -3252,11 +3681,13 @@ class DialogData {
       (e) => e.name == name,
       orElse: () => SubmitPhase.success,
     );
+    final rawSkipped = json['skippedNames'] ?? json['skipped_names'];
     return DialogData(
       phase: phase,
       title: (json['title'] ?? '').toString(),
       message: (json['message'] ?? '').toString(),
       details: (json['details'] ?? '').toString(),
+      skippedNames: rawSkipped is List ? [for (final n in rawSkipped) n.toString()] : const [],
     );
   }
 }
