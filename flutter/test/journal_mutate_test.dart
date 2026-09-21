@@ -123,6 +123,12 @@ void main() {
           'credit': 0,
           'normalAccountId': 'keep-d',
         },
+        {
+          'notes': 'سارة',
+          'debit': 0,
+          'credit': 20,
+          'normalAccountId': 'keep-c',
+        },
       ],
     };
     final patched = applyAccountPatchToJournal(
@@ -144,6 +150,86 @@ void main() {
     expect(details[1]['normalAccountId'], 'new-c');
     expect(details[1]['accountName'], 'دائن جديد');
     expect(details[2]['normalAccountId'], 'keep-d');
+  });
+
+  test('finds the auto-added third slot by the selected third-party name and number', () {
+    final details = [
+      {'notes': 'علي', 'debit': 100, 'credit': 0, 'normalAccountId': 'd1', 'accountName': 'صندوق', 'accountCode': '555'},
+      {'notes': 'علي', 'debit': 0, 'credit': 100, 'normalAccountId': 'c1', 'accountName': 'وكيل', 'accountCode': '9830'},
+      {
+        'notes': 'عمولة الحوالات',
+        'debit': 0,
+        'credit': 4,
+        'normalAccountId': 'old-tp',
+        'accountName': 'عمولة الحوالات',
+        'accountCode': '422',
+        'NormalAccount': {'Id': 'old-tp', 'AccountCode': '422', 'AccountName': 'عمولة الحوالات'},
+      },
+    ];
+    final vouchers = classifyJournalVouchers(details);
+    expect(vouchers.length, 1);
+    final entry = _row(id: '1', name: 'علي', amount: 100).copyWith(
+      thirdPartyAccount: '422',
+      thirdPartyAccountName: 'عمولة الحوالات',
+    );
+    final line = findThirdPartyLine(details, vouchers.first, entry);
+    expect(line, isNotNull);
+    expect(detailAccountId(line!), 'old-tp');
+    expect(detailAccountCode(line), '422');
+  });
+
+  test('patches the auto-added third slot when its notes are the third-party name', () {
+    final journal = {
+      'journalEntryDetails': [
+        {'notes': 'علي', 'debit': 100, 'credit': 0, 'normalAccountId': 'd1', 'accountName': 'صندوق'},
+        {'notes': 'علي', 'debit': 0, 'credit': 100, 'normalAccountId': 'c1', 'accountName': 'وكيل'},
+        {
+          'notes': 'عمولة الحوالات',
+          'debit': 0,
+          'credit': 4,
+          'normalAccountId': 'old-tp',
+          'accountName': 'عمولة الحوالات',
+          'accountCode': '422',
+          'NormalAccount': {'Id': 'old-tp', 'AccountCode': '422', 'AccountName': 'عمولة الحوالات'},
+        },
+      ],
+    };
+    final patched = applyAccountPatchToJournal(
+      journal,
+      [
+        _row(id: '1', name: 'علي', amount: 100).copyWith(
+          thirdPartyAccount: '422',
+          thirdPartyAccountName: 'عمولة الحوالات',
+        ),
+      ],
+      const LedgerAccountPatch(thirdPartyId: 'new-tp', thirdPartyName: 'صندوق ربح جديد', thirdPartyCode: '430'),
+    );
+    final details = journalDetailMaps(patched);
+    expect(details[0]['normalAccountId'], 'd1');
+    expect(details[1]['normalAccountId'], 'c1');
+    expect(details[2]['normalAccountId'], 'new-tp');
+    expect(details[2]['accountCode'], '430');
+    expect(details[2]['accountName'], 'صندوق ربح جديد');
+    expect((details[2]['NormalAccount'] as Map)['Id'], 'new-tp');
+    expect((details[2]['NormalAccount'] as Map)['AccountCode'], '430');
+    expect(thirdPartyLineHasAccount(details[2], const LedgerAccountPatch(thirdPartyId: 'new-tp', thirdPartyCode: '430')), isTrue);
+  });
+
+  test('assigns leftover third-party slots to each remittance in a batch journal', () {
+    final details = [
+      {'notes': 'علي', 'debit': 100, 'credit': 0, 'normalAccountId': 'd1', 'orderInJournal': 0},
+      {'notes': 'علي', 'debit': 0, 'credit': 100, 'normalAccountId': 'c1', 'orderInJournal': 1},
+      {'notes': 'عمولة الحوالات', 'debit': 0, 'credit': 4, 'normalAccountId': 'tp-a', 'accountCode': '422', 'orderInJournal': 2},
+      {'notes': 'سارة', 'debit': 50, 'credit': 0, 'normalAccountId': 'd1', 'orderInJournal': 3},
+      {'notes': 'سارة', 'debit': 0, 'credit': 50, 'normalAccountId': 'c1', 'orderInJournal': 4},
+      {'notes': 'عمولة الحوالات', 'debit': 0, 'credit': 2, 'normalAccountId': 'tp-b', 'accountCode': '422', 'orderInJournal': 5},
+    ];
+    final vouchers = classifyJournalVouchers(details);
+    expect(vouchers.length, 2);
+    expect(vouchers[0].name, 'علي');
+    expect(detailAccountId(vouchers[0].thirdPartyLine!), 'tp-a');
+    expect(vouchers[1].name, 'سارة');
+    expect(detailAccountId(vouchers[1].thirdPartyLine!), 'tp-b');
   });
 
   test('patches the actual third-party journal line not only corresponding fields', () {

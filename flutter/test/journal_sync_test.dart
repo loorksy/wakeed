@@ -108,4 +108,40 @@ void main() {
     expect(rows.first.thirdPartyAccount, '422');
     expect(rows.first.thirdPartyAccountName, 'عمولة الحوالات');
   });
+
+  test('auto-added third slot named after the profit box still becomes one voucher', () {
+    const payload = {
+      'journalEntryData': [
+        {
+          'id': 'j4',
+          'journalEntryNumber': 2002,
+          'date': '2026-09-21T00:00:00',
+          'userName': 'ahmed isa',
+          'journalEntryDetails': [
+            {'normalAccountId': 'd1', 'accountName': 'صندوق', 'accountCode': '555', 'debit': 80, 'credit': 0, 'notes': 'حنين'},
+            {'normalAccountId': 'c1', 'accountName': 'وكيل', 'accountCode': '9830', 'debit': 0, 'credit': 80, 'notes': 'حنين'},
+            {
+              'normalAccountId': 'tp1',
+              'accountName': 'عمولة الحوالات',
+              'accountCode': '422',
+              'debit': 0,
+              'credit': 3,
+              'notes': 'عمولة الحوالات',
+            },
+          ],
+        },
+      ],
+    };
+
+    final rows = ledgerFromWakeedJournals(
+      payload,
+      ownerKey: 'owner_x',
+      userName: 'ahmed isa',
+      accountCodesById: {'d1': '555', 'c1': '9830', 'tp1': '422'},
+    );
+    expect(rows.length, 1);
+    expect(rows.first.name, 'حنين');
+    expect(rows.first.thirdPartyAccount, '422');
+    expect(rows.first.thirdPartyAccountName, 'عمولة الحوالات');
+  });
 }

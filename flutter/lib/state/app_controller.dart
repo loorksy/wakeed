@@ -3315,19 +3315,22 @@ class AppController extends ChangeNotifier {
   Future<void> _updateJournalEntry(Map<String, dynamic> journal) async {
     const query = 'reconciliationCheck=false';
     try {
-      await _api('PUT', '/api/JournalEntry/UpdateJournalEntry?$query', journal, {'asForm': true});
+      await _api('PUT', '/api/JournalEntry/UpdateJournalEntry?$query', journal);
     } catch (_) {
-      await _api('PUT', '/api/JournalEntry?$query', journal, {'asForm': true});
+      try {
+        await _api('PUT', '/api/JournalEntry/UpdateJournalEntry?$query', journal, {'asForm': true});
+      } catch (_) {
+        try {
+          await _api('PUT', '/api/JournalEntry?$query', journal);
+        } catch (_) {
+          await _api('PUT', '/api/JournalEntry?$query', journal, {'asForm': true});
+        }
+      }
     }
   }
 
   Map<String, dynamic> _cloneJournal(Map journal) {
-    return {
-      ...Map<String, dynamic>.from(journal),
-      'journalEntryDetails': [
-        for (final d in journalDetailMaps(journal)) Map<String, dynamic>.from(d),
-      ],
-    };
+    return sanitizeJournalForUpdate(journal);
   }
 
   Future<LedgerAccountPatch> _resolveLedgerPatch({
@@ -3451,6 +3454,18 @@ class AppController extends ChangeNotifier {
       if (patch.hasThirdParty && patch.thirdPartyId.isEmpty) {
         throw PlatformApiException('تعذر إيجاد حساب الطرف الثالث في دليل وكيد.');
       }
+      final currentThirdPartyIds = <String, String>{};
+      if (patch.hasThirdParty) {
+        for (final row in selected) {
+          final code = row.thirdPartyAccount.trim();
+          if (code.isEmpty) continue;
+          try {
+            final resolved = await resolveAccount(code);
+            final id = pickId(resolved);
+            if (id.isNotEmpty) currentThirdPartyIds[ledgerRowIdentity(row)] = id;
+          } catch (_) {}
+        }
+      }
       final grouped = groupLedgerByJournal(selected);
       final ok = <String>[];
       final failed = <String>[];
@@ -3464,8 +3479,79 @@ class AppController extends ChangeNotifier {
         }
         try {
           final journal = _cloneJournal(await _fetchJournalEntry(journalId));
-          final updated = applyAccountPatchToJournal(journal, rows, patch);
+          final detailsBefore = journalDetailMaps(journal);
+          final classifiedBefore = classifyJournalVouchers(detailsBefore);
+          if (patch.hasThirdParty) {
+            for (final row in rows) {
+              ClassifiedVoucher? voucher;
+              for (final item in classifiedBefore) {
+                if (voucherMatchesEntry(item, row)) {
+                  voucher = item;
+                  break;
+                }
+              }
+              if (voucher == null) {
+                throw PlatformApiException('تعذر مطابقة السند ${row.name} في وكيد.');
+              }
+              final line = findThirdPartyLine(
+                detailsBefore,
+                voucher,
+                row,
+                currentId: currentThirdPartyIds[ledgerRowIdentity(row)] ?? '',
+              );
+              if (line == null) {
+                throw PlatformApiException(
+                  'تعذر إيجاد الخانة الثالثة (الطرف الثالث) في سند ${row.name}.',
+                );
+              }
+            }
+          }
+          final updated = applyAccountPatchToJournal(
+            journal,
+            rows,
+            patch,
+            currentThirdPartyIds: currentThirdPartyIds,
+          );
+          Future<bool> thirdPartySaved(Map journalAfter) async {
+            if (!patch.hasThirdParty) return true;
+            final detailsAfter = journalDetailMaps(journalAfter);
+            final classifiedAfter = classifyJournalVouchers(detailsAfter);
+            for (final row in rows) {
+              ClassifiedVoucher? voucher;
+              for (final item in classifiedAfter) {
+                if (voucherMatchesEntry(item, row)) {
+                  voucher = item;
+                  break;
+                }
+              }
+              final line = voucher == null
+                  ? null
+                  : findThirdPartyLine(
+                      detailsAfter,
+                      voucher,
+                      row.copyWith(
+                        thirdPartyAccount: patch.thirdPartyCode,
+                        thirdPartyAccountName: patch.thirdPartyName,
+                      ),
+                      currentId: patch.thirdPartyId,
+                    );
+              if (!thirdPartyLineHasAccount(line, patch)) return false;
+            }
+            return true;
+          }
+
           await _updateJournalEntry(updated);
+          var confirmed = _cloneJournal(await _fetchJournalEntry(journalId));
+          if (!await thirdPartySaved(confirmed)) {
+            const query = 'reconciliationCheck=false';
+            await _api('PUT', '/api/JournalEntry/UpdateJournalEntry?$query', updated, {'asForm': true});
+            confirmed = _cloneJournal(await _fetchJournalEntry(journalId));
+          }
+          if (!await thirdPartySaved(confirmed)) {
+            throw PlatformApiException(
+              'وكيد لم يحفظ حساب الطرف الثالث في الخانة الثالثة لسند ${label.isEmpty ? journalId : label}.',
+            );
+          }
           _replaceLedgerRows(rows.map((row) => applyPatchToLedgerRow(row, patch)));
           ok.add(label.isEmpty ? journalId : label);
         } catch (err) {
