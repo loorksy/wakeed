@@ -17,6 +17,20 @@ Future<void> showAccountPicker(BuildContext context, {required AccountPickTarget
   );
 }
 
+/// Picks a chart account and returns its code without changing saved defaults.
+Future<String?> chooseAccount(
+  BuildContext context, {
+  required String title,
+  Color? tone,
+}) async {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => _AccountChooserSheet(title: title, tone: tone ?? WakeedColors.accent),
+  );
+}
+
 class _AccountPickerSheet extends StatefulWidget {
   const _AccountPickerSheet();
 
@@ -149,5 +163,97 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
       app.selectDebitAccount(code);
     }
     Navigator.pop(context);
+  }
+}
+
+class _AccountChooserSheet extends StatefulWidget {
+  const _AccountChooserSheet({required this.title, required this.tone});
+
+  final String title;
+  final Color tone;
+
+  @override
+  State<_AccountChooserSheet> createState() => _AccountChooserSheetState();
+}
+
+class _AccountChooserSheetState extends State<_AccountChooserSheet> {
+  String query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    final list = app.filteredAccounts(query);
+    final shown = list.take(120).toList();
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.75,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: widget.tone),
+                      ),
+                    ),
+                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  autofocus: true,
+                  decoration: const InputDecoration(hintText: 'رمز أو اسم', prefixIcon: Icon(Icons.search)),
+                  onChanged: (v) => setState(() => query = v),
+                  onSubmitted: (v) {
+                    final first = app.filteredAccounts(v);
+                    if (first.isNotEmpty) Navigator.pop(context, pickAccountCode(first.first));
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    list.isEmpty ? 'لا توجد نتائج' : 'عرض ${shown.length} من ${list.length} حساب',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: shown.isEmpty
+                    ? const Center(child: Text('لا توجد حسابات مطابقة.'))
+                    : ListView.builder(
+                        itemCount: shown.length,
+                        itemBuilder: (context, i) {
+                          final acc = shown[i];
+                          final code = pickAccountCode(acc);
+                          final name = accountNameOf(acc);
+                          return ListTile(
+                            title: Text(code, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: Text(
+                              [
+                                name,
+                                if (app.currencyQuoteForAccount(code).badge.isNotEmpty)
+                                  app.currencyQuoteForAccount(code).badge,
+                              ].where((s) => s.toString().trim().isNotEmpty).join(' · '),
+                            ),
+                            onTap: () => Navigator.pop(context, code),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

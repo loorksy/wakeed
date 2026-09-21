@@ -1,4 +1,5 @@
 import '../models/models.dart';
+import 'journal_mutate.dart';
 import 'json_util.dart';
 
 /// Maps Wakeed `GET /api/JournalEntry` rows (docs.wakeed.app Journals)
@@ -79,6 +80,8 @@ List<LedgerEntry> _rowsFromJournal(
         debitAccountName: pair.debitName,
         creditAccount: _accountCode(pair.credit, accountCodesById),
         creditAccountName: pair.creditName,
+        thirdPartyAccount: _accountCode(pair.thirdParty, accountCodesById),
+        thirdPartyAccountName: pair.thirdPartyName,
         notes: pair.notes,
         statement: pair.name,
       ),
@@ -94,6 +97,8 @@ class _Pair {
     required this.credit,
     required this.creditName,
     required this.notes,
+    this.thirdParty = '',
+    this.thirdPartyName = '',
   });
   final String name;
   final num amount;
@@ -102,6 +107,8 @@ class _Pair {
   final String credit;
   final String creditName;
   final String notes;
+  final String thirdParty;
+  final String thirdPartyName;
 }
 
 List<_Pair> _detailPairs(List<dynamic> details) {
@@ -153,6 +160,8 @@ List<_Pair> _pairsFromGroup(List<Map> lines, {required String fallbackName}) {
       credit: (c['normalAccountId'] ?? c['NormalAccountId'] ?? '').toString(),
       creditName: (c['accountName'] ?? c['AccountName'] ?? '').toString(),
       notes: name,
+      thirdParty: _pairThirdPartyId(d, c),
+      thirdPartyName: _pairThirdPartyName(d, c),
     ));
   }
   return out;
@@ -161,6 +170,18 @@ List<_Pair> _pairsFromGroup(List<Map> lines, {required String fallbackName}) {
 String _accountCode(String id, Map<String, String> codesById) {
   if (id.isEmpty) return '';
   return codesById[id] ?? '';
+}
+
+String _pairThirdPartyId(Map debit, Map credit) {
+  final fromCredit = pickDetailThirdPartyId(credit);
+  if (fromCredit.isNotEmpty) return fromCredit;
+  return pickDetailThirdPartyId(debit);
+}
+
+String _pairThirdPartyName(Map debit, Map credit) {
+  final fromCredit = pickDetailThirdPartyName(credit);
+  if (fromCredit.isNotEmpty) return fromCredit;
+  return pickDetailThirdPartyName(debit);
 }
 
 Map<String, String> accountCodesById(List<dynamic> accounts) {

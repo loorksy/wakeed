@@ -3,11 +3,20 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class PreviewTable extends StatelessWidget {
-  const PreviewTable({super.key, required this.columns, required this.rows, this.emptyText = '—'});
+  const PreviewTable({
+    super.key,
+    required this.columns,
+    required this.rows,
+    this.emptyText = '—',
+    this.selected,
+    this.onToggle,
+  });
 
   final List<String> columns;
   final List<List<String>> rows;
   final String emptyText;
+  final List<bool>? selected;
+  final ValueChanged<int>? onToggle;
 
   Color? _toneFor(String column) {
     if (column == 'مدين') return WakeedColors.err;
@@ -30,6 +39,7 @@ class PreviewTable extends StatelessWidget {
         dataRowMinHeight: 34,
         dataRowMaxHeight: 56,
         columnSpacing: 14,
+        showCheckboxColumn: onToggle != null,
         headingTextStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
         dataTextStyle: const TextStyle(fontSize: 12),
         columns: [
@@ -42,15 +52,17 @@ class PreviewTable extends StatelessWidget {
             ),
         ],
         rows: [
-          for (final r in rows)
+          for (var rowIndex = 0; rowIndex < rows.length; rowIndex++)
             DataRow(
+              selected: selected != null && rowIndex < selected!.length && selected![rowIndex],
+              onSelectChanged: onToggle == null ? null : (_) => onToggle!(rowIndex),
               cells: [
-                for (var i = 0; i < r.length; i++)
+                for (var i = 0; i < rows[rowIndex].length; i++)
                   DataCell(
                     SizedBox(
                       width: 110,
                       child: Text(
-                        r[i],
+                        rows[rowIndex][i],
                         maxLines: 3,
                         style: TextStyle(
                           fontSize: 12,

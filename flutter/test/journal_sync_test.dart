@@ -24,6 +24,8 @@ void main() {
               'debit': 0,
               'credit': 253,
               'notes': 'حنين يوسف خالد',
+              'correspondingAccountID': 'tp1',
+              'thirdPartyName': 'عمولة الحوالات',
             },
           ],
         },
@@ -44,7 +46,7 @@ void main() {
       payload,
       ownerKey: 'owner_x',
       userName: 'ahmed isa',
-      accountCodesById: {'d1': '555', 'c1': '9830'},
+      accountCodesById: {'d1': '555', 'c1': '9830', 'tp1': '422'},
     );
     expect(rows.length, 1);
     expect(rows.first.journalNumber, '1081');
@@ -52,6 +54,8 @@ void main() {
     expect(rows.first.amount, 253);
     expect(rows.first.debitAccount, '555');
     expect(rows.first.creditAccount, '9830');
+    expect(rows.first.thirdPartyAccount, '422');
+    expect(rows.first.thirdPartyAccountName, 'عمولة الحوالات');
     expect(rows.first.kind, 'synced');
   });
 }
