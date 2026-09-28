@@ -13,6 +13,8 @@ class LedgerEntry {
     this.debitAccountName = '',
     this.creditAccount = '',
     this.creditAccountName = '',
+    this.thirdPartyAccount = '',
+    this.thirdPartyAccountName = '',
     this.notes = '',
     this.statement = '',
   });
@@ -30,6 +32,8 @@ class LedgerEntry {
   final String debitAccountName;
   final String creditAccount;
   final String creditAccountName;
+  final String thirdPartyAccount;
+  final String thirdPartyAccountName;
   final String notes;
   final String statement;
 
@@ -48,6 +52,9 @@ class LedgerEntry {
       debitAccountName: (row['debit_account_name'] ?? row['debitAccountName'] ?? '').toString(),
       creditAccount: (row['credit_account'] ?? row['creditAccount'] ?? '').toString(),
       creditAccountName: (row['credit_account_name'] ?? row['creditAccountName'] ?? '').toString(),
+      thirdPartyAccount: (row['third_party_account'] ?? row['thirdPartyAccount'] ?? '').toString(),
+      thirdPartyAccountName:
+          (row['third_party_account_name'] ?? row['thirdPartyAccountName'] ?? '').toString(),
       notes: (row['notes'] ?? '').toString(),
       statement: (row['statement'] ?? '').toString(),
     );
@@ -67,9 +74,40 @@ class LedgerEntry {
         'debitAccountName': debitAccountName,
         'creditAccount': creditAccount,
         'creditAccountName': creditAccountName,
+        'thirdPartyAccount': thirdPartyAccount,
+        'thirdPartyAccountName': thirdPartyAccountName,
         'notes': notes,
         'statement': statement,
       };
+
+  LedgerEntry copyWith({
+    String? debitAccount,
+    String? debitAccountName,
+    String? creditAccount,
+    String? creditAccountName,
+    String? thirdPartyAccount,
+    String? thirdPartyAccountName,
+  }) {
+    return LedgerEntry(
+      id: id,
+      ownerKey: ownerKey,
+      createdAt: createdAt,
+      entryDate: entryDate,
+      journalNumber: journalNumber,
+      journalId: journalId,
+      kind: kind,
+      name: name,
+      amount: amount,
+      debitAccount: debitAccount ?? this.debitAccount,
+      debitAccountName: debitAccountName ?? this.debitAccountName,
+      creditAccount: creditAccount ?? this.creditAccount,
+      creditAccountName: creditAccountName ?? this.creditAccountName,
+      thirdPartyAccount: thirdPartyAccount ?? this.thirdPartyAccount,
+      thirdPartyAccountName: thirdPartyAccountName ?? this.thirdPartyAccountName,
+      notes: notes,
+      statement: statement,
+    );
+  }
 }
 
 class WakeedSubscription {

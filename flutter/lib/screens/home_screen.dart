@@ -14,6 +14,7 @@ import '../widgets/common.dart';
 import '../widgets/preview_table.dart';
 import '../widgets/settings_card.dart';
 import '../widgets/fx_fields.dart';
+import '../widgets/ledger_edit_sheet.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -1048,6 +1049,31 @@ class _ProfitEntryCardState extends State<_ProfitEntryCard> {
   }
 }
 
+Future<void> _confirmDeleteLedgers(BuildContext context, AppController app) async {
+  final selected = app.selectedLedgerEntries();
+  if (selected.isEmpty) return;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('حذف من وكيد'),
+      content: Text(
+        selected.length == 1
+            ? 'سيُحذف سند «${selected.first.name}» من وكيد ومن السجل. لا يمكن التراجع.'
+            : 'سيُحذف ${selected.length} اسماً من وكيد ومن السجل. في السند الجماعي تُحذف الأسماء المحددة فقط، وإن فرغ السند يُحذف بالكامل.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: WakeedColors.err),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('حذف'),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) await app.deleteSelectedLedgers();
+}
+
 class LedgerTab extends StatelessWidget {
   const LedgerTab({super.key});
 
@@ -1125,12 +1151,39 @@ class LedgerTab extends StatelessWidget {
                     child: const Text('تنزيل Excel'),
                   ),
                   OutlinedButton(
-                    onPressed: app.ledgerSyncing ? null : app.syncWakeedJournals,
+                    onPressed: app.ledgerSyncing || app.ledgerBusy ? null : app.syncWakeedJournals,
                     child: Text(app.ledgerSyncing ? 'جارٍ المزامنة...' : 'مزامنة'),
                   ),
                   TextButton(onPressed: app.clearLedgerFilters, child: const Text('مسح')),
+                  if (rows.isNotEmpty)
+                    OutlinedButton(
+                      onPressed: app.ledgerBusy ? null : app.selectAllFilteredLedger,
+                      child: Text(
+                        app.filteredLedger().every((r) => app.ledgerSelectedIds.contains(r.id)) &&
+                                app.ledgerSelectedIds.isNotEmpty
+                            ? 'إلغاء تحديد الكل'
+                            : 'تحديد الكل',
+                      ),
+                    ),
+                  if (app.ledgerSelectedIds.isNotEmpty)
+                    FilledButton.tonal(
+                      onPressed: app.ledgerBusy ? null : () => showLedgerEditSheet(context),
+                      child: Text('تعديل الحسابات (${app.selectedLedgerEntries().length})'),
+                    ),
+                  if (app.ledgerSelectedIds.isNotEmpty)
+                    FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: WakeedColors.err),
+                      onPressed: app.ledgerBusy ? null : () => _confirmDeleteLedgers(context, app),
+                      child: Text('حذف من وكيد (${app.selectedLedgerEntries().length})'),
+                    ),
                 ],
               ),
+              if (app.ledgerBusy) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(),
+                const SizedBox(height: 4),
+                Text('جارٍ تطبيق التغيير في وكيد...', style: Theme.of(context).textTheme.bodySmall),
+              ],
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -1148,7 +1201,11 @@ class LedgerTab extends StatelessWidget {
                         ? 'جارٍ مزامنة سندات حسابك من وكيد...'
                         : 'لا يوجد سندات في السجل بعد. أنشئ سنداً أو اضغط مزامنة.')
                     : 'لا نتائج لهذه الفلترة.',
-                columns: const ['رقم', 'تاريخ', 'وقت', 'الاسم', 'مبلغ', 'مدين', 'دائن', 'بيان', 'نوع'],
+                columns: const ['رقم', 'تاريخ', 'وقت', 'الاسم', 'مبلغ', 'مدين', 'دائن', 'طرف ثالث', 'بيان', 'نوع'],
+                selected: [
+                  for (final row in pageRows) app.ledgerSelectedIds.contains(row.id),
+                ],
+                onToggle: app.ledgerBusy ? null : (i) => app.toggleLedgerSelection(pageRows[i].id),
                 rows: [
                   for (final row in pageRows)
                     [
@@ -1161,6 +1218,9 @@ class LedgerTab extends StatelessWidget {
                       row.creditAccountName.isNotEmpty
                           ? '${row.creditAccount} — ${row.creditAccountName}'
                           : row.creditAccount,
+                      row.thirdPartyAccountName.isNotEmpty
+                          ? '${row.thirdPartyAccount} — ${row.thirdPartyAccountName}'
+                          : row.thirdPartyAccount,
                       row.statement.isNotEmpty ? row.statement : row.notes,
                       app.ledgerKindLabel(row.kind),
                     ],

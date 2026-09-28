@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/journal_mutate.dart';
 import '../core/remittance_parser.dart';
 import '../models/models.dart';
 import '../state/app_controller.dart';
@@ -68,6 +70,25 @@ class SubmitOverlay extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (data.skippedNames.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'أسماء لم تُسجَّل لأنها موجودة مسبقاً (${data.skippedNames.length})',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 140),
+                          child: SingleChildScrollView(
+                            child: Text(
+                              skippedNamesText(data.skippedNames),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _CopySkippedButton(names: data.skippedNames),
+                      ],
                       if (!loading) ...[
                         const SizedBox(height: 14),
                         Align(
@@ -86,6 +107,32 @@ class SubmitOverlay extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CopySkippedButton extends StatefulWidget {
+  const _CopySkippedButton({required this.names});
+
+  final List<String> names;
+
+  @override
+  State<_CopySkippedButton> createState() => _CopySkippedButtonState();
+}
+
+class _CopySkippedButtonState extends State<_CopySkippedButton> {
+  bool copied = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: skippedNamesText(widget.names)));
+        if (!mounted) return;
+        setState(() => copied = true);
+      },
+      icon: Icon(copied ? Icons.check : Icons.copy, size: 16),
+      label: Text(copied ? 'تم نسخ الأسماء' : 'نسخ الأسماء غير المسجّلة'),
     );
   }
 }
